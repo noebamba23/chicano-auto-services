@@ -1,7 +1,8 @@
-# CHICANO AUTO SERVICES — Architecture (Phase 0 + Phase 1)
+# CHICANO AUTO SERVICES — Architecture (Phase 0 + Phase 1 + Phase 2)
 
 Ce document répond aux points 1 à 11 de la section 71 du cahier des charges
-(« Première étape — avant de coder ») pour l'état actuel du projet.
+(« Première étape — avant de coder ») pour l'état actuel du projet. Le détail
+spécifique à la gestion des véhicules (Phase 2) est dans [`VEHICLES.md`](VEHICLES.md).
 
 ## 1. Stack actuelle
 
@@ -35,20 +36,34 @@ src/
     urgence/page.tsx                Placeholder (flux complet = Phase 3)
     espace-client/
       layout.tsx                   Garde de session + habillage espace client
-      page.tsx                     Tableau de bord client (Bonjour {prénom}...)
-    api/auth/
-      register/route.ts
-      login/route.ts
-      logout/route.ts
-      me/route.ts
-      whatsapp/verify-code/route.ts
-      whatsapp/resend-code/route.ts
+      page.tsx                     Tableau de bord client (Bonjour {prénom}, véhicule principal...)
+      vehicules/
+        page.tsx                   Mes véhicules (liste)
+        nouveau/page.tsx           Ajouter mon véhicule
+        [id]/page.tsx              Fiche véhicule (identité + sections à venir)
+        [id]/modifier/page.tsx     Modifier mon véhicule
+    api/
+      auth/
+        register/route.ts
+        login/route.ts
+        logout/route.ts
+        me/route.ts
+        whatsapp/verify-code/route.ts
+        whatsapp/resend-code/route.ts
+      vehicles/
+        route.ts                   GET (liste) / POST (création)
+        [id]/route.ts              GET / PATCH
+        [id]/set-primary/route.ts  POST
+        [id]/archive/route.ts      POST
+        [id]/photo/route.ts        POST (multipart, upload photo)
   proxy.ts                          Garde d'accès (Node.js runtime, Next 16)
   lib/
     db.ts                           Client Prisma singleton
-    http.ts                         Helpers de réponse JSON
+    http.ts                         Helpers de réponse JSON (dont mapping d'erreurs métier → HTTP)
     phone.ts                        Normalisation E.164 (libphonenumber-js)
-    validation/auth.ts              Schémas zod
+    validation/
+      auth.ts                      Schémas zod auth
+      vehicles.ts                  Schémas zod véhicule (création/mise à jour)
     auth/
       password.ts                   Hash/verify bcrypt
       otp.ts                        Génération/hash OTP + config
@@ -61,11 +76,22 @@ src/
       providers/
         mock-whatsapp-provider.ts
         meta-whatsapp-provider.ts
+    vehicles/
+      service.ts                    Couche de service (ownership systématique)
+      guard.ts                      requireVerifiedCustomer() — garde des routes API
+      vehicle-id.ts                 Génération CHC-VH-000001
+      options.ts                    Libellés/valeurs centralisés (carrosserie, carburant, boîte)
+    storage/
+      provider.ts                   Interface StorageProvider
+      get-provider.ts               Sélection local/s3 par env
+      providers/local-storage-provider.ts  Écrit réellement sous public/uploads
   components/
     marketing/site-header.tsx, site-footer.tsx
     auth/logout-button.tsx
+    vehicles/
+      vehicle-card.tsx, vehicle-form.tsx, vehicle-actions.tsx
 prisma/
-  schema.prisma                     Modèle de données complet (section 62)
+  schema.prisma                     Modèle de données complet (section 62) + extensions véhicule (Phase 2)
   seed.ts                           Templates de notification + compte admin de test
 docker-compose.yml                  PostgreSQL local (port 5433)
 ```
@@ -84,10 +110,10 @@ n'est un prototype jetable.
 
 ## 5. Ce qui doit être créé (prochaines phases)
 
-Voir [`ROADMAP.md`](ROADMAP.md) — phases 2 à 10 non démarrées : véhicules, demandes
-de service, urgence, géolocalisation, rendez-vous, dashboard production, technicien,
-diagnostic, rapport, devis, ordre de travail, facturation, carnet numérique, rappels,
-CRM, B2B/flotte.
+Voir [`ROADMAP.md`](ROADMAP.md) — phases 3 à 10 non démarrées : demandes de service,
+urgence, géolocalisation, rendez-vous, dashboard production, technicien, diagnostic,
+rapport, devis, ordre de travail, facturation, carnet numérique, rappels, CRM,
+B2B/flotte.
 
 ## 6. Architecture cible
 
@@ -105,10 +131,15 @@ affectation technicien, diagnostic (contrôles, codes défaut, rapport), devis +
 versions + ordre de travail, pièces/stock, facturation/paiement, carnet
 d'entretien/rappels, notifications (15 événements de la section 50), audit log.
 
-Seules les tables **User, Session, WhatsappVerification, Customer, AuditLog** sont
-aujourd'hui câblées côté application (Phase 1). Les autres tables existent en base
-dès la première migration pour ne pas bloquer les phases suivantes sur des
-migrations tardives, mais leur logique métier reste à construire phase par phase.
+Les tables **User, Session, WhatsappVerification, Customer, AuditLog** (Phase 1) et
+**Vehicle, VehiclePhoto, MileageReading** (Phase 2, cette dernière posée mais pas
+encore exploitée) sont câblées côté application. Le schéma Vehicle a été étendu en
+Phase 2 : `sequenceNumber` (compteur natif Postgres), `bodyType`, `engine`,
+`isPrimary`, `status`/`archivedAt` (archivage), enums `VehicleBodyType`/
+`VehicleStatus`/`MileageSource`, transmission étendue (CVT, DCT) — détails dans
+[`VEHICLES.md`](VEHICLES.md). Les autres tables existent en base dès la première
+migration pour ne pas bloquer les phases suivantes sur des migrations tardives, mais
+leur logique métier reste à construire phase par phase.
 
 ## 8. Flux WhatsApp OTP
 
@@ -140,11 +171,15 @@ mode mock il n'apparaît que dans les logs serveur de développement.
 ```
 Accueil → Créer mon compte → Vérification WhatsApp → Espace client
                                                     ↘ Connexion (comptes existants)
+                                                    ↘ Mes véhicules → Ajouter/Modifier/
+                                                      Fiche véhicule → Définir principal /
+                                                      Archiver
 ```
 
-L'espace client affiche « Bonjour {prénom} », un état vide pour le véhicule
-principal, et les actions de la section 15 (celles non encore construites sont
-visibles mais désactivées, pour ne pas exposer de liens morts).
+L'espace client affiche « Bonjour {prénom} », le véhicule principal (ou un état vide
+avec CTA « Ajouter un véhicule »), et les actions de la section 15 — « Mes véhicules »
+est maintenant active, les autres (celles non encore construites) restent visibles
+mais désactivées, pour ne pas exposer de liens morts.
 
 ## 10. Flux production
 

@@ -27,3 +27,9 @@
 body {
   font-family: var(--font-sans), Arial, Helvetica, sans-serif;
 }
+
+@layer components {
+  .input {
+    @apply mt-1 w-full rounded-md border border-chicano-gray-light px-3 py-2 text-sm text-chicano-black focus:border-chicano-red focus:outline-none;
+  }
+}

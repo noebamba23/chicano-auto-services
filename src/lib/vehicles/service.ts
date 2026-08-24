@@ -1,0 +1,208 @@
+import { db } from "@/lib/db";
+import { randomUUID } from "crypto";
+import { formatChicanoVehicleId } from "./vehicle-id";
+import type { VehicleInput } from "@/lib/validation/vehicles";
+import type { Prisma, VehicleStatus } from "@prisma/client";
+
+// Couche de service véhicules (section 7 de la Phase 2). Toute fonction ici
+// prend un `customerId` déjà résolu depuis la session — jamais un id de
+// véhicule transmis par le client sans vérification de propriété (section 6).
+// Un véhicule qui n'appartient pas au client se comporte EXACTEMENT comme un
+// véhicule inexistant (VehicleNotFoundError), pour ne jamais laisser fuiter
+// son existence à un tiers.
+
+export class VehicleNotFoundError extends Error {
+  constructor() {
+    super("Véhicule introuvable.");
+    this.name = "VehicleNotFoundError";
+  }
+}
+
+const VEHICLE_INCLUDE = {
+  photos: { orderBy: { createdAt: "asc" as const } },
+} satisfies Prisma.VehicleInclude;
+
+export async function getCustomerIdForUser(userId: string): Promise<string | null> {
+  const customer = await db.customer.findUnique({ where: { userId }, select: { id: true } });
+  return customer?.id ?? null;
+}
+
+export function listVehiclesForCustomer(customerId: string, status: VehicleStatus = "ACTIVE") {
+  return db.vehicle.findMany({
+    where: { customerId, status },
+    include: VEHICLE_INCLUDE,
+    orderBy: [{ isPrimary: "desc" }, { createdAt: "asc" }],
+  });
+}
+
+export async function getVehicleForCustomer(customerId: string, vehicleId: string) {
+  const vehicle = await db.vehicle.findFirst({
+    where: { id: vehicleId, customerId },
+    include: VEHICLE_INCLUDE,
+  });
+  if (!vehicle) throw new VehicleNotFoundError();
+  return vehicle;
+}
+
+function buildCreateData(input: VehicleInput) {
+  return {
+    chicanoVehicleId: `pending-${randomUUID()}`,
+    make: input.make,
+    model: input.model,
+    trim: input.trim || null,
+    year: input.year ?? null,
+    bodyType: input.bodyType ?? null,
+    fuelType: input.fuelType,
+    engine: input.engine || null,
+    transmission: input.transmission ?? null,
+    licensePlate: input.licensePlate,
+    vin: input.vin || null,
+    mileage: input.mileage ?? null,
+    color: input.color || null,
+    firstRegisteredAt: input.firstRegisteredAt ? new Date(input.firstRegisteredAt) : null,
+    notes: input.notes || null,
+  };
+}
+
+// Ne porte dans l'objet de mise à jour que les champs réellement présents
+// dans le payload partiel — un champ absent (undefined) ne touche pas la
+// valeur existante en base ; un champ présent mais vide (chaîne vide) efface
+// explicitement la valeur.
+function buildUpdateData(input: Partial<VehicleInput>): Prisma.VehicleUpdateInput {
+  const data: Prisma.VehicleUpdateInput = {};
+
+  if (input.make !== undefined) data.make = input.make;
+  if (input.model !== undefined) data.model = input.model;
+  if (input.trim !== undefined) data.trim = input.trim || null;
+  if (input.year !== undefined) data.year = input.year;
+  if (input.bodyType !== undefined) data.bodyType = input.bodyType;
+  if (input.fuelType !== undefined) data.fuelType = input.fuelType;
+  if (input.engine !== undefined) data.engine = input.engine || null;
+  if (input.transmission !== undefined) data.transmission = input.transmission;
+  if (input.licensePlate !== undefined) data.licensePlate = input.licensePlate;
+  if (input.vin !== undefined) data.vin = input.vin || null;
+  if (input.mileage !== undefined) data.mileage = input.mileage;
+  if (input.color !== undefined) data.color = input.color || null;
+  if (input.firstRegisteredAt !== undefined) {
+    data.firstRegisteredAt = input.firstRegisteredAt ? new Date(input.firstRegisteredAt) : null;
+  }
+  if (input.notes !== undefined) data.notes = input.notes || null;
+
+  return data;
+}
+
+export async function createVehicle(customerId: string, input: VehicleInput) {
+  return db.$transaction(async (tx) => {
+    const existingCount = await tx.vehicle.count({ where: { customerId, status: "ACTIVE" } });
+
+    // Placeholder unique temporaire — remplacé juste après par l'identifiant
+    // CHC-VH dérivé du compteur natif Postgres (sequenceNumber), garanti
+    // atomique même sous création concurrente (section 3 de la Phase 2).
+    const created = await tx.vehicle.create({
+      data: {
+        ...buildCreateData(input),
+        customerId,
+        isPrimary: existingCount === 0,
+      },
+    });
+
+    const vehicle = await tx.vehicle.update({
+      where: { id: created.id },
+      data: { chicanoVehicleId: formatChicanoVehicleId(created.sequenceNumber) },
+      include: VEHICLE_INCLUDE,
+    });
+
+    await tx.auditLog.create({
+      data: {
+        action: "VEHICLE_CREATED",
+        entity: "Vehicle",
+        entityId: vehicle.id,
+        newValue: { chicanoVehicleId: vehicle.chicanoVehicleId, make: vehicle.make, model: vehicle.model },
+      },
+    });
+
+    return vehicle;
+  });
+}
+
+export async function updateVehicle(customerId: string, vehicleId: string, input: Partial<VehicleInput>) {
+  const existing = await db.vehicle.findFirst({ where: { id: vehicleId, customerId } });
+  if (!existing) throw new VehicleNotFoundError();
+
+  const vehicle = await db.vehicle.update({
+    where: { id: vehicleId },
+    data: buildUpdateData(input),
+    include: VEHICLE_INCLUDE,
+  });
+
+  await db.auditLog.create({
+    data: { action: "VEHICLE_UPDATED", entity: "Vehicle", entityId: vehicle.id, newValue: input },
+  });
+
+  return vehicle;
+}
+
+export async function setPrimaryVehicle(customerId: string, vehicleId: string) {
+  const existing = await db.vehicle.findFirst({ where: { id: vehicleId, customerId, status: "ACTIVE" } });
+  if (!existing) throw new VehicleNotFoundError();
+
+  return db.$transaction(async (tx) => {
+    await tx.vehicle.updateMany({
+      where: { customerId, isPrimary: true, NOT: { id: vehicleId } },
+      data: { isPrimary: false },
+    });
+    const vehicle = await tx.vehicle.update({
+      where: { id: vehicleId },
+      data: { isPrimary: true },
+      include: VEHICLE_INCLUDE,
+    });
+    await tx.auditLog.create({
+      data: { action: "VEHICLE_SET_PRIMARY", entity: "Vehicle", entityId: vehicle.id },
+    });
+    return vehicle;
+  });
+}
+
+export async function archiveVehicle(customerId: string, vehicleId: string) {
+  const existing = await db.vehicle.findFirst({ where: { id: vehicleId, customerId, status: "ACTIVE" } });
+  if (!existing) throw new VehicleNotFoundError();
+
+  return db.$transaction(async (tx) => {
+    const archived = await tx.vehicle.update({
+      where: { id: vehicleId },
+      data: { status: "ARCHIVED", archivedAt: new Date(), isPrimary: false },
+    });
+
+    // Si le véhicule archivé était le véhicule principal, promouvoir le
+    // véhicule actif restant le plus ancien pour qu'un client actif ne se
+    // retrouve jamais sans véhicule principal.
+    if (existing.isPrimary) {
+      const nextPrimary = await tx.vehicle.findFirst({
+        where: { customerId, status: "ACTIVE" },
+        orderBy: { createdAt: "asc" },
+      });
+      if (nextPrimary) {
+        await tx.vehicle.update({ where: { id: nextPrimary.id }, data: { isPrimary: true } });
+      }
+    }
+
+    await tx.auditLog.create({
+      data: { action: "VEHICLE_ARCHIVED", entity: "Vehicle", entityId: archived.id },
+    });
+
+    return archived;
+  });
+}
+
+export async function addVehiclePhoto(
+  customerId: string,
+  vehicleId: string,
+  photo: { url: string; storageKey: string }
+) {
+  const existing = await db.vehicle.findFirst({ where: { id: vehicleId, customerId } });
+  if (!existing) throw new VehicleNotFoundError();
+
+  return db.vehiclePhoto.create({
+    data: { vehicleId, url: photo.url, storageKey: photo.storageKey },
+  });
+}

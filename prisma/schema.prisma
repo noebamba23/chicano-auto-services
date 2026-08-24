@@ -231,20 +231,54 @@ enum FuelType {
 enum TransmissionType {
   MANUAL
   AUTOMATIC
+  CVT
+  DCT
   OTHER
+}
+
+// Carrosserie du véhicule (section 2 de la Phase 2). Valeurs centralisées
+// côté application dans src/lib/vehicles/options.ts — ne pas disperser les
+// libellés dans le code.
+enum VehicleBodyType {
+  SEDAN
+  SUV
+  FOUR_BY_FOUR
+  VAN
+  PICKUP
+  OTHER
+}
+
+enum VehicleStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+// Source d'un relevé de kilométrage — préparation des rappels d'entretien
+// (section 10 de la Phase 2).
+enum MileageSource {
+  CUSTOMER
+  TECHNICIAN
+  SYSTEM
 }
 
 model Vehicle {
   id                    String   @id @default(cuid())
-  chicanoVehicleId      String   @unique // CHC-VH-000001
+  // Compteur natif Postgres (identity/serial) — source atomique et sûre en
+  // cas de créations concurrentes pour dériver chicanoVehicleId. Jamais
+  // utilisé comme clé primaire ni exposé tel quel au client.
+  sequenceNumber        Int      @unique @default(autoincrement())
+  chicanoVehicleId      String   @unique // CHC-VH-000001 — identifiant métier lisible
   customerId            String
   fleetId               String?
   make                  String
   model                 String
   trim                  String?
   year                  Int?
-  vehicleType           String?
+  bodyType              VehicleBodyType?
   fuelType              FuelType @default(OTHER)
+  // Détail libre du moteur (ex. "2.4L Turbo Diesel", "V6 3.5L") — distinct du
+  // carburant (fuelType), qui reste la valeur structurée/filtrable.
+  engine                String?
   transmission          TransmissionType?
   licensePlate          String?
   vin                   String?
@@ -252,12 +286,16 @@ model Vehicle {
   color                 String?
   firstRegisteredAt     DateTime?
   notes                 String?
+  isPrimary             Boolean  @default(false)
+  status                VehicleStatus @default(ACTIVE)
+  archivedAt            DateTime?
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
 
   customer              Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
   fleet                 Fleet?   @relation(fields: [fleetId], references: [id])
   photos                VehiclePhoto[]
+  mileageReadings       MileageReading[]
   serviceRequests       ServiceRequest[]
   appointments          Appointment[]
   diagnostics           Diagnostic[]
@@ -268,6 +306,7 @@ model Vehicle {
   maintenanceReminders  MaintenanceReminder[]
 
   @@index([customerId])
+  @@index([customerId, isPrimary])
   @@index([licensePlate])
   @@index([vin])
 }
@@ -276,10 +315,27 @@ model VehiclePhoto {
   id          String   @id @default(cuid())
   vehicleId   String
   url         String
+  storageKey  String?
   caption     String?
   createdAt   DateTime @default(now())
 
   vehicle     Vehicle  @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+}
+
+// Historique des relevés kilométriques — le champ Vehicle.mileage reste le
+// relevé courant (dénormalisé pour affichage rapide), cette table conserve
+// l'historique nécessaire aux futurs rappels d'entretien.
+model MileageReading {
+  id          String   @id @default(cuid())
+  vehicleId   String
+  value       Int
+  source      MileageSource @default(CUSTOMER)
+  recordedAt  DateTime @default(now())
+  notes       String?
+
+  vehicle     Vehicle  @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+
+  @@index([vehicleId, recordedAt])
 }
 
 // ============================================================
