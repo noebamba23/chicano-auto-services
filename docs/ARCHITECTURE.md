@@ -40,8 +40,9 @@ src/
       vehicules/
         page.tsx                   Mes véhicules (liste)
         nouveau/page.tsx           Ajouter mon véhicule
-        [id]/page.tsx              Fiche véhicule (identité + sections à venir)
+        [id]/page.tsx              Fiche véhicule (identité + actions + historique)
         [id]/modifier/page.tsx     Modifier mon véhicule
+      demande-service/page.tsx    Route réelle (ownership vérifiée) pour Diagnostic/Entretien, préparée pour la Phase 3
     api/
       auth/
         register/route.ts
@@ -78,9 +79,13 @@ src/
         meta-whatsapp-provider.ts
     vehicles/
       service.ts                    Couche de service (ownership systématique)
+      service.test.ts               Tests unitaires (fake db en mémoire)
       guard.ts                      requireVerifiedCustomer() — garde des routes API
+      guard.test.ts                 Tests unitaires (session mockée)
       vehicle-id.ts                 Génération CHC-VH-000001
+      vehicle-id.test.ts
       options.ts                    Libellés/valeurs centralisés (carrosserie, carburant, boîte)
+      test-utils/fake-db.ts         Faux client Prisma minimal pour les tests (voir VEHICLES.md)
     storage/
       provider.ts                   Interface StorageProvider
       get-provider.ts               Sélection local/s3 par env
@@ -89,10 +94,11 @@ src/
     marketing/site-header.tsx, site-footer.tsx
     auth/logout-button.tsx
     vehicles/
-      vehicle-card.tsx, vehicle-form.tsx, vehicle-actions.tsx
+      vehicle-card.tsx, vehicle-form.tsx, vehicle-actions.tsx, vehicle-photo-uploader.tsx
 prisma/
   schema.prisma                     Modèle de données complet (section 62) + extensions véhicule (Phase 2)
   seed.ts                           Templates de notification + compte admin de test
+vitest.config.mts                   Configuration des tests unitaires (npm test)
 docker-compose.yml                  PostgreSQL local (port 5433)
 ```
 

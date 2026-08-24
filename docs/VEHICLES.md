@@ -35,10 +35,18 @@ l'invariant n'est pas garanti au niveau base. Durcissement possible plus tard : 
 manuellement `CREATE UNIQUE INDEX ... ON "Vehicle" ("customerId") WHERE "isPrimary" = true;`
 dans une migration Prisma.
 
-Le premier véhicule créé par un client devient automatiquement principal.
+Le premier véhicule créé par un client devient automatiquement principal. Un client
+peut aussi cocher « Définir comme véhicule principal » dès le formulaire d'ajout (pour
+un 2e véhicule ou suivant) — dans ce cas le formulaire crée le véhicule puis appelle
+`POST /api/vehicles/[id]/set-primary` juste après.
 Si le véhicule principal est archivé, le véhicule actif restant le plus ancien est
 automatiquement promu (pour qu'un client actif ne se retrouve jamais sans véhicule
 principal tant qu'il a au moins un véhicule actif).
+
+Tenter de définir un véhicule **archivé** comme principal, ou d'archiver un véhicule
+**déjà archivé**, renvoie une erreur métier `VehicleConflictError` → `409` (le véhicule
+est bien celui du client, mais son état ne permet pas l'opération — voir le catalogue
+d'erreurs ci-dessous).
 
 ## Suppression / archivage
 
@@ -94,30 +102,80 @@ silencieusement.
 Route : `POST /api/vehicles/[id]/photo` (multipart, `photo` field), JPEG/PNG/WebP,
 8 Mo max, ownership vérifiée avant traitement du fichier.
 
+**UI branchée** : `VehiclePhotoUploader` (bouton sur la fiche véhicule, remplace la
+photo existante) et le champ fichier du formulaire d'ajout (`VehicleForm`, uploadé
+juste après la création du véhicule, puisque la route exige un `vehicleId`
+existant). Sans base de données, la vérification d'ownership qui précède l'écriture
+échoue avant même d'atteindre le disque — l'utilisateur voit alors une erreur
+générique (`500`, jamais la stack Prisma), jamais un faux succès : voir la section
+Tests plus bas pour ce qui a pu être vérifié sans DB.
+
+## Catalogue d'erreurs API
+
+| Code | Cas | Origine |
+| --- | --- | --- |
+| `400` | Payload rejeté par un schéma zod | `jsonFromZodError` — réponse `{ error, fieldErrors }`, le formulaire affiche chaque message sous le champ concerné, pas seulement un message générique |
+| `401` | Pas de session valide | `UnauthenticatedError` |
+| `403` | Authentifié mais compte non `VERIFIED` | `UnverifiedAccountError` |
+| `404` | Véhicule inexistant **ou** appartenant à un autre client | `VehicleNotFoundError` — ces deux cas sont **délibérément fusionnés** : ne jamais confirmer par un `403` qu'un véhicule donné existe mais n'appartient pas à l'appelant |
+| `409` | Véhicule possédé mais état incompatible avec l'opération (déjà archivé, ou définir un archivé comme principal) | `VehicleConflictError` |
+| `500` | Erreur inattendue | `jsonApiErrorResponse` journalise côté serveur et renvoie un message générique — jamais la stack Prisma brute |
+
 ## Ce qui n'est pas encore construit
 
 - Historique, Diagnostics, Rapports, Devis, Réparations, Factures, Maintenance,
-  Rappels sur la fiche véhicule : sections présentes (ancrées `#diagnostics`,
-  `#maintenance`, etc., liées depuis les actions rapides), affichent "Bientôt
-  disponible" — l'architecture (schéma Prisma) est prête, la logique métier viendra
-  phase par phase (P4 à P8 de la roadmap).
-- Historique des relevés kilométriques (modèle prêt, aucune UI/API).
+  Rappels : la fiche véhicule affiche un état « Historique » vide générique
+  (« Votre historique CHICANO apparaîtra ici après votre première intervention. ») et
+  3 actions réelles (Diagnostic/Entretien → `/espace-client/demande-service?vehicleId=…`,
+  Assistance → `/urgence?vehicleId=…`) — ces routes vérifient l'ownership du véhicule
+  transmis et affichent un état « bientôt disponible » assumé, mais ne sont pas des
+  liens décoratifs : le Vehicle ID y est réellement propagé et vérifié, prêt pour le
+  workflow complet de la Phase 3.
+- Historique des relevés kilométriques (modèle `MileageReading` prêt, aucune UI/API).
 - Durcissement DB de l'unicité du véhicule principal (voir section dédiée ci-dessus).
+- Backend de stockage production (S3/Cloudinary/Supabase Storage) — seul `local` est
+  implémenté.
 
-## Tests exécutés dans cette session
+## Tests automatisés (Vitest)
 
-Sans base de données disponible (Docker Desktop toujours non opérationnel — voir
-`docs/ROADMAP.md`), ce qui suit a été **réellement vérifié**, et rien de plus :
+`npm test` (`vitest run`) — 34 tests, 4 fichiers, tous verts :
+
+- `src/lib/validation/vehicles.test.ts` — schéma zod pur (marque/modèle obligatoires,
+  immatriculation obligatoire, VIN facultatif, année et kilométrage bornés, enums
+  invalides rejetés). Aucune base de données impliquée.
+- `src/lib/vehicles/vehicle-id.test.ts` — formatage `CHC-VH-000001`.
+- `src/lib/vehicles/service.test.ts` — logique métier de `service.ts` (création,
+  génération d'ID, liste filtrée par client, **ownership interdit** sur
+  get/update/setPrimary/archive pour un véhicule d'un autre client, mise à jour
+  partielle, unicité + bascule du véhicule principal, promotion automatique à
+  l'archivage, conflit 409 sur archivé→principal et archivé→archiver).
+- `src/lib/vehicles/guard.test.ts` — `requireVerifiedCustomer()` : utilisateur non
+  authentifié, compte suspendu, compte `PENDING_VERIFICATION`, résolution du
+  customerId pour un compte vérifié.
+
+**Important — ce que ces tests couvrent et ne couvrent PAS** : `service.test.ts` et
+`guard.test.ts` utilisent un faux client Prisma écrit à la main
+(`src/lib/vehicles/test-utils/fake-db.ts`), en mémoire, qui ne reproduit que le
+sous-ensemble d'API utilisé par `service.ts` (filtrage par égalité, `NOT`, tri sur
+`isPrimary`/`createdAt`, transactions qui s'exécutent simplement l'une après l'autre).
+Ce sont donc des **tests unitaires de la logique applicative**, pas des tests
+d'intégration contre un vrai Postgres : ils ne vérifient ni les contraintes réelles de
+la base, ni le comportement transactionnel sous concurrence réelle, ni que le SQL
+généré par Prisma fait bien ce qu'on attend. Ne pas les confondre avec les tests DB de
+la section suivante, qui restent à exécuter contre une vraie instance.
+
+## Tests exécutés dans cette session (sans base de données)
+
+Docker Desktop reste non opérationnel sur cette machine (voir `docs/ROADMAP.md`). Ce
+qui suit a été **réellement vérifié**, et rien de plus :
 
 - `prisma validate` et `prisma generate` : schéma valide, client généré sans erreur.
 - `prisma migrate diff --from-empty --to-schema-datamodel` (mode hors-ligne, sans
   connexion DB) : le schéma complet se compile en SQL Postgres valide.
+- `npm test` (Vitest) : 34/34 tests verts — voir ci-dessus.
 - `tsc --noEmit` : aucune erreur de type sur l'ensemble du projet.
 - `eslint` : aucun avertissement.
-- `next build` : build de production réussi, toutes les routes attendues générées
-  (dont `/api/vehicles`, `/api/vehicles/[id]`, `/api/vehicles/[id]/{archive,
-  set-primary,photo}`, `/espace-client/vehicules`, `/espace-client/vehicules/[id]`,
-  `/espace-client/vehicules/[id]/modifier`, `/espace-client/vehicules/nouveau`).
+- `next build` : build de production réussi, toutes les routes attendues générées.
 - Navigateur (serveur `next dev`, sans DB) :
   - `/espace-client/vehicules` sans session → redirection vers
     `/connexion?next=/espace-client/vehicules` (garde de page, `src/proxy.ts`).
@@ -128,8 +186,8 @@ Sans base de données disponible (Docker Desktop toujours non opérationnel — 
     Phase 1 détectée en navigation manuelle.
 
 **Non exécuté** (nécessite une base de données vivante) : création réelle d'un
-véhicule, génération effective d'un `CHC-VH-000001`, test d'isolation entre deux
-clients (Client A ne peut pas voir le véhicule du Client B), unicité du véhicule
-principal sous transaction réelle, upload de photo de bout en bout, migration Prisma
-appliquée. À exécuter dès que PostgreSQL est disponible — voir la procédure dans
-`docs/ROADMAP.md`.
+véhicule contre Postgres, génération effective d'un `CHC-VH-000001` via la séquence
+native, isolation réelle entre deux comptes clients de bout en bout (navigateur),
+unicité du véhicule principal sous transaction Postgres réelle, upload de photo de
+bout en bout (écriture disque + enregistrement DB), migration Prisma appliquée. À
+exécuter dès que PostgreSQL est disponible — voir la procédure dans `docs/ROADMAP.md`.

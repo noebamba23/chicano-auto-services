@@ -18,6 +18,17 @@ export class VehicleNotFoundError extends Error {
   }
 }
 
+// Le véhicule existe et appartient bien à l'appelant, mais l'opération
+// demandée est incompatible avec son état actuel (ex. définir un véhicule
+// archivé comme principal). Distinct de VehicleNotFoundError : ce cas ne
+// révèle rien qu'un propriétaire légitime ne sache déjà (409, pas 404).
+export class VehicleConflictError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "VehicleConflictError";
+  }
+}
+
 const VEHICLE_INCLUDE = {
   photos: { orderBy: { createdAt: "asc" as const } },
 } satisfies Prisma.VehicleInclude;
@@ -143,8 +154,11 @@ export async function updateVehicle(customerId: string, vehicleId: string, input
 }
 
 export async function setPrimaryVehicle(customerId: string, vehicleId: string) {
-  const existing = await db.vehicle.findFirst({ where: { id: vehicleId, customerId, status: "ACTIVE" } });
+  const existing = await db.vehicle.findFirst({ where: { id: vehicleId, customerId } });
   if (!existing) throw new VehicleNotFoundError();
+  if (existing.status !== "ACTIVE") {
+    throw new VehicleConflictError("Un véhicule archivé ne peut pas être défini comme principal.");
+  }
 
   return db.$transaction(async (tx) => {
     await tx.vehicle.updateMany({
@@ -164,8 +178,11 @@ export async function setPrimaryVehicle(customerId: string, vehicleId: string) {
 }
 
 export async function archiveVehicle(customerId: string, vehicleId: string) {
-  const existing = await db.vehicle.findFirst({ where: { id: vehicleId, customerId, status: "ACTIVE" } });
+  const existing = await db.vehicle.findFirst({ where: { id: vehicleId, customerId } });
   if (!existing) throw new VehicleNotFoundError();
+  if (existing.status !== "ACTIVE") {
+    throw new VehicleConflictError("Ce véhicule est déjà archivé.");
+  }
 
   return db.$transaction(async (tx) => {
     const archived = await tx.vehicle.update({

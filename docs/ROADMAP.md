@@ -7,7 +7,7 @@ Ne pas paralléliser les phases : chacune se construit sur la précédente.
 | --- | --- | --- |
 | P0 | Audit + architecture | ✅ Fait — voir `ARCHITECTURE.md` |
 | P1 | Auth + vérification WhatsApp | ✅ Fait — inscription, OTP (mock/meta), connexion, session, garde d'accès, audit log |
-| P2 | Client + véhicules | ✅ Fait (code) — voir `VEHICLES.md` ; tests DB réels en attente de PostgreSQL |
+| P2 | Client + véhicules | ✅ Fait (code + tests unitaires) — voir `VEHICLES.md` ; tests DB réels en attente de PostgreSQL |
 | P3 | Demandes + urgence + géolocalisation | ⏳ À faire |
 | P4 | Rendez-vous + production | ⏳ À faire — dashboard, Kanban, calendrier |
 | P5 | Technicien + diagnostic | ⏳ À faire |
@@ -39,24 +39,40 @@ Ne pas paralléliser les phases : chacune se construit sur la précédente.
 
 - Mes véhicules (`/espace-client/vehicules`) : liste, compteur, véhicule principal,
   ajout.
-- Fiche véhicule (`/espace-client/vehicules/[id]`) : identité complète + sections
-  Historique/Diagnostics/Rapports/Devis/Réparations/Factures/Maintenance/Rappels
-  ("Bientôt disponible", ancrées pour les actions rapides Diagnostic/Entretien).
+- Fiche véhicule (`/espace-client/vehicules/[id]`) : en-tête premium (nom, résumé,
+  Vehicle ID), section Informations, 3 actions réelles (Diagnostic/Entretien/
+  Assistance, Vehicle ID propagé et vérifié vers les routes cibles), section
+  Historique avec état vide assumé.
 - Création (`/espace-client/vehicules/nouveau`) et modification
-  (`/espace-client/vehicules/[id]/modifier`), formulaire partagé
-  `VehicleForm`, valeurs d'enum centralisées dans `src/lib/vehicles/options.ts`.
+  (`/espace-client/vehicules/[id]/modifier`), formulaire partagé `VehicleForm`
+  sectionné (Identification / Caractéristiques / Utilisation / Photo / Options),
+  erreurs de validation affichées sous chaque champ (pas seulement un message
+  générique), valeurs d'enum centralisées dans `src/lib/vehicles/options.ts`.
+- Upload photo branché : sur la fiche véhicule (`VehiclePhotoUploader`, remplacement
+  possible) et dès la création (le fichier choisi est envoyé juste après la création
+  du véhicule).
 - `CHC-VH-000001` généré depuis un compteur natif Postgres (`sequenceNumber`
   autoincrement), jamais utilisé comme clé primaire — détails dans `VEHICLES.md`.
-- Véhicule principal unique par client (première création auto-principale,
-  ré-assignation possible, promotion automatique à l'archivage du principal).
+- Véhicule principal unique par client (première création auto-principale, case à
+  cocher "définir comme principal" dès l'ajout, ré-assignation possible, promotion
+  automatique à l'archivage du principal).
 - Archivage (pas de suppression physique) pour préserver l'intégrité de l'historique
-  futur (diagnostics, factures...).
+  futur (diagnostics, factures...) — conflit `409` explicite sur un véhicule déjà
+  archivé ou tenter de le définir comme principal.
 - Ownership strictement vérifiée côté serveur sur toutes les routes
   (`src/lib/vehicles/service.ts` + `guard.ts`) — un véhicule d'un autre client se
-  comporte comme un véhicule inexistant (404), jamais un 403 révélateur.
+  comporte comme un véhicule inexistant (404), jamais un 403 révélateur. Catalogue
+  d'erreurs complet (400/401/403/404/409/500) dans `VEHICLES.md`.
 - `StorageProvider` (upload photo) avec implémentation `local` fonctionnelle
   (écrit réellement sous `public/uploads/`, pas une URL simulée) — détails et limites
   dans `VEHICLES.md`.
+- Route `/espace-client/demande-service?vehicleId=…&type=…` : pas un lien décoratif —
+  ownership du véhicule vérifiée, état "bientôt disponible" assumé en attendant la
+  Phase 3.
+- 34 tests unitaires (Vitest) sur la validation, la génération d'ID, la logique
+  d'ownership, la bascule du véhicule principal et l'archivage — voir `VEHICLES.md`
+  pour ce qu'ils couvrent (logique applicative) et ne couvrent pas (pas de Postgres
+  réel).
 - Documentation complète : `docs/VEHICLES.md`.
 
 ## Non couvert par la Phase 2 (volontairement)

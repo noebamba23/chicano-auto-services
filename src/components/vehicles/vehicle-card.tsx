@@ -47,28 +47,36 @@ export function VehicleCard({ vehicle }: { vehicle: VehicleWithPhotos }) {
 
         <div className="mt-4 grid grid-cols-2 gap-2 text-xs">
           <Link
-            href={`/espace-client/vehicules/${vehicle.id}#diagnostics`}
+            href={`/espace-client/vehicules/${vehicle.id}`}
+            className="rounded-md bg-chicano-black px-2 py-2 text-center font-medium text-white hover:bg-chicano-black-soft"
+          >
+            Voir le dossier
+          </Link>
+          <Link
+            href={`/espace-client/vehicules/${vehicle.id}/modifier`}
+            className="rounded-md border border-chicano-gray-light px-2 py-2 text-center font-medium text-chicano-black hover:border-chicano-red"
+          >
+            Modifier
+          </Link>
+        </div>
+        <div className="mt-2 grid grid-cols-3 gap-2 text-xs">
+          <Link
+            href={`/espace-client/demande-service?vehicleId=${vehicle.id}&type=diagnostic`}
             className="rounded-md border border-chicano-gray-light px-2 py-2 text-center font-medium text-chicano-black hover:border-chicano-red"
           >
             Diagnostic
           </Link>
           <Link
-            href={`/espace-client/vehicules/${vehicle.id}#maintenance`}
+            href={`/espace-client/demande-service?vehicleId=${vehicle.id}&type=entretien`}
             className="rounded-md border border-chicano-gray-light px-2 py-2 text-center font-medium text-chicano-black hover:border-chicano-red"
           >
             Entretien
           </Link>
           <Link
-            href="/urgence"
+            href={`/urgence?vehicleId=${vehicle.id}`}
             className="rounded-md border border-chicano-gray-light px-2 py-2 text-center font-medium text-chicano-black hover:border-chicano-red"
           >
             Assistance
-          </Link>
-          <Link
-            href={`/espace-client/vehicules/${vehicle.id}`}
-            className="rounded-md bg-chicano-black px-2 py-2 text-center font-medium text-white hover:bg-chicano-black-soft"
-          >
-            Voir le dossier
           </Link>
         </div>
       </div>
