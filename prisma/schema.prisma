@@ -1,0 +1,930 @@
+// CHICANO AUTO SERVICES — schema de données plateforme
+// Couvre le modèle minimum de la section 62 du cahier des charges.
+// Phase 1 (Auth + vérification WhatsApp) : entièrement câblée côté application.
+// Les autres modèles sont posés dès maintenant pour ne pas bloquer les phases
+// suivantes sur des migrations tardives, mais leur logique métier n'est pas
+// encore implémentée (cf. PHASE 2+ dans docs/ROADMAP.md).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================
+// IDENTITÉ / ACCÈS
+// ============================================================
+
+enum UserRole {
+  CUSTOMER
+  TECHNICIAN
+  PRODUCTION_STAFF
+  ADMIN
+  SUPER_ADMIN
+}
+
+enum AccountStatus {
+  PENDING_VERIFICATION
+  VERIFIED
+  SUSPENDED
+  BLOCKED
+}
+
+model User {
+  id                  String        @id @default(cuid())
+  firstName           String
+  lastName             String
+  email               String?       @unique
+  phoneRaw            String
+  phoneE164           String        @unique
+  passwordHash        String
+  role                UserRole      @default(CUSTOMER)
+  status              AccountStatus @default(PENDING_VERIFICATION)
+  whatsappVerified    Boolean       @default(false)
+  whatsappVerifiedAt  DateTime?
+  termsAcceptedAt     DateTime
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+
+  customerProfile     Customer?
+  technicianProfile   Technician?
+  whatsappVerifications WhatsappVerification[]
+  auditLogs           AuditLog[]    @relation("AuditLogActor")
+  notifications       Notification[]
+  sessions            Session[]
+
+  @@index([phoneE164])
+  @@index([status])
+}
+
+model Session {
+  id            String   @id @default(cuid())
+  userId        String
+  tokenHash     String   @unique
+  userAgent     String?
+  ipAddress     String?
+  expiresAt     DateTime
+  revokedAt     DateTime?
+  createdAt     DateTime @default(now())
+
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+// Vérification OTP WhatsApp — section 62 : ne jamais stocker l'OTP en clair.
+model WhatsappVerification {
+  id            String    @id @default(cuid())
+  userId        String
+  phoneNumber   String
+  codeHash      String
+  expiresAt     DateTime
+  attempts      Int       @default(0)
+  maxAttempts   Int       @default(5)
+  consumedAt    DateTime?
+  verifiedAt    DateTime?
+  lastSentAt    DateTime  @default(now())
+  resendCount   Int       @default(0)
+  createdAt     DateTime  @default(now())
+
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([phoneNumber])
+}
+
+// ============================================================
+// PROFILS
+// ============================================================
+
+model Customer {
+  id            String   @id @default(cuid())
+  userId        String   @unique
+  companyId     String?
+  crmStage      CrmStage @default(NEW)
+  crmSource     CrmSource?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  company       Company?  @relation(fields: [companyId], references: [id])
+  vehicles      Vehicle[]
+  serviceRequests ServiceRequest[]
+  appointments  Appointment[]
+  quotesAccepted Quote[] @relation("QuoteAcceptedBy")
+  invoices      Invoice[]
+  leads         Lead[]
+}
+
+enum CrmStage {
+  NEW
+  CONTACTED
+  QUALIFIED
+  APPOINTMENT
+  CUSTOMER
+  LOST
+}
+
+enum CrmSource {
+  WHATSAPP
+  FACEBOOK
+  INSTAGRAM
+  WEBSITE
+  REFERRAL
+  COMPANY
+  PARTNER
+  CAR_DEALER
+  OTHER
+}
+
+model Lead {
+  id          String    @id @default(cuid())
+  customerId  String?
+  fullName    String
+  phoneE164   String?
+  source      CrmSource @default(OTHER)
+  stage       CrmStage  @default(NEW)
+  notes       String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  customer    Customer? @relation(fields: [customerId], references: [id])
+}
+
+enum TechnicianSkill {
+  MECHANICAL
+  DIAGNOSTIC
+  ELECTRICAL
+  ELECTRONICS
+  HYBRID
+  EV
+  KEY_PROGRAMMING
+}
+
+model Technician {
+  id            String    @id @default(cuid())
+  userId        String    @unique
+  skills        TechnicianSkill[]
+  isAvailable   Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  assignments   TechnicianAssignment[]
+  diagnostics   Diagnostic[]
+}
+
+// ============================================================
+// ENTREPRISES / FLOTTES (B2B — architecture préparée, P2)
+// ============================================================
+
+model Company {
+  id          String   @id @default(cuid())
+  name        String
+  taxId       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  customers   Customer[]
+  fleets      Fleet[]
+}
+
+model Fleet {
+  id          String   @id @default(cuid())
+  companyId   String
+  name        String
+  createdAt   DateTime @default(now())
+
+  company     Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  vehicles    Vehicle[]
+  contracts   FleetContract[]
+}
+
+model FleetContract {
+  id          String   @id @default(cuid())
+  fleetId     String
+  reference   String   @unique
+  startDate   DateTime
+  endDate     DateTime?
+  terms       String?
+  createdAt   DateTime @default(now())
+
+  fleet       Fleet    @relation(fields: [fleetId], references: [id], onDelete: Cascade)
+}
+
+// ============================================================
+// VÉHICULES
+// ============================================================
+
+enum FuelType {
+  ESSENCE
+  DIESEL
+  HYBRID
+  PLUGIN_HYBRID
+  ELECTRIC
+  OTHER
+}
+
+enum TransmissionType {
+  MANUAL
+  AUTOMATIC
+  OTHER
+}
+
+model Vehicle {
+  id                    String   @id @default(cuid())
+  chicanoVehicleId      String   @unique // CHC-VH-000001
+  customerId            String
+  fleetId               String?
+  make                  String
+  model                 String
+  trim                  String?
+  year                  Int?
+  vehicleType           String?
+  fuelType              FuelType @default(OTHER)
+  transmission          TransmissionType?
+  licensePlate          String?
+  vin                   String?
+  mileage               Int?
+  color                 String?
+  firstRegisteredAt     DateTime?
+  notes                 String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  customer              Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  fleet                 Fleet?   @relation(fields: [fleetId], references: [id])
+  photos                VehiclePhoto[]
+  serviceRequests       ServiceRequest[]
+  appointments          Appointment[]
+  diagnostics           Diagnostic[]
+  quotes                Quote[]
+  workOrders            WorkOrder[]
+  invoices              Invoice[]
+  maintenancePlans      MaintenancePlan[]
+  maintenanceReminders  MaintenanceReminder[]
+
+  @@index([customerId])
+  @@index([licensePlate])
+  @@index([vin])
+}
+
+model VehiclePhoto {
+  id          String   @id @default(cuid())
+  vehicleId   String
+  url         String
+  caption     String?
+  createdAt   DateTime @default(now())
+
+  vehicle     Vehicle  @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+}
+
+// ============================================================
+// DEMANDES DE SERVICE / URGENCE / LOCALISATION
+// ============================================================
+
+enum ServiceCategory {
+  DIAGNOSTIC
+  MAINTENANCE
+  REPAIR
+  ELECTRICAL
+  KEY_PROGRAMMING
+  PRE_PURCHASE_INSPECTION
+  ASSISTANCE
+  TECHNICAL_VISIT_PREP
+  OTHER
+}
+
+enum InterventionType {
+  AT_GARAGE
+  MOBILE
+}
+
+enum ServiceRequestStatus {
+  DRAFT
+  PENDING
+  UNDER_REVIEW
+  ACCEPTED
+  REJECTED
+  CONVERTED_TO_APPOINTMENT
+  CANCELLED
+}
+
+enum UrgencyReason {
+  VEHICLE_IMMOBILIZED
+  ENGINE_WONT_START
+  BATTERY
+  ELECTRICAL_FAILURE
+  FLAT_TIRE
+  CRITICAL_WARNING_LIGHT
+  ACCIDENT
+  OTHER
+}
+
+enum LocationSource {
+  GPS
+  MANUAL
+}
+
+model ServiceRequest {
+  id                String   @id @default(cuid())
+  customerId        String
+  vehicleId         String
+  category          ServiceCategory
+  description       String
+  interventionType  InterventionType
+  isUrgent          Boolean  @default(false)
+  urgencyReason     UrgencyReason?
+  status            ServiceRequestStatus @default(PENDING)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  customer          Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  vehicle           Vehicle  @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  attachments       ServiceRequestAttachment[]
+  location          RequestLocation?
+  appointment       Appointment?
+
+  @@index([customerId])
+  @@index([status])
+}
+
+model ServiceRequestAttachment {
+  id               String   @id @default(cuid())
+  serviceRequestId String
+  url              String
+  type             String // photo | video | document
+  createdAt        DateTime @default(now())
+
+  serviceRequest   ServiceRequest @relation(fields: [serviceRequestId], references: [id], onDelete: Cascade)
+}
+
+// Localisation liée à une demande — jamais publique (section 22).
+model RequestLocation {
+  id               String   @id @default(cuid())
+  serviceRequestId String   @unique
+  latitude         Float?
+  longitude        Float?
+  accuracy         Float?
+  address          String?
+  city             String?
+  district         String?
+  commune          String?
+  neighborhood     String?
+  landmark         String?
+  locationSource   LocationSource @default(MANUAL)
+  capturedAt       DateTime @default(now())
+
+  serviceRequest   ServiceRequest @relation(fields: [serviceRequestId], references: [id], onDelete: Cascade)
+}
+
+// ============================================================
+// RENDEZ-VOUS / AFFECTATION TECHNICIEN
+// ============================================================
+
+enum AppointmentStatus {
+  DRAFT
+  PENDING
+  UNDER_REVIEW
+  ACCEPTED
+  REJECTED
+  RESCHEDULE_REQUESTED
+  ASSIGNED
+  TECHNICIAN_EN_ROUTE
+  ARRIVED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+
+model Appointment {
+  id                String   @id @default(cuid())
+  serviceRequestId  String   @unique
+  customerId        String
+  vehicleId         String
+  scheduledDate     DateTime?
+  scheduledSlot     String?
+  interventionType  InterventionType
+  status            AppointmentStatus @default(PENDING)
+  acceptedAt        DateTime?
+  rejectedAt        DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  serviceRequest    ServiceRequest @relation(fields: [serviceRequestId], references: [id], onDelete: Cascade)
+  customer          Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  vehicle           Vehicle  @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  location          AppointmentLocation?
+  assignments       TechnicianAssignment[]
+  diagnostics       Diagnostic[]
+
+  @@index([status])
+  @@index([scheduledDate])
+}
+
+model AppointmentLocation {
+  id               String   @id @default(cuid())
+  appointmentId    String   @unique
+  latitude         Float?
+  longitude        Float?
+  accuracy         Float?
+  address          String?
+  city             String?
+  district         String?
+  commune          String?
+  neighborhood     String?
+  landmark         String?
+  locationSource   LocationSource @default(MANUAL)
+  capturedAt       DateTime @default(now())
+
+  appointment      Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+}
+
+enum AssignmentStatus {
+  ASSIGNED
+  EN_ROUTE
+  ARRIVED
+  COMPLETED
+  REASSIGNED
+}
+
+model TechnicianAssignment {
+  id             String   @id @default(cuid())
+  appointmentId  String
+  technicianId   String
+  status         AssignmentStatus @default(ASSIGNED)
+  departedAt     DateTime?
+  arrivedAt      DateTime?
+  createdAt      DateTime @default(now())
+
+  appointment    Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  technician     Technician  @relation(fields: [technicianId], references: [id])
+
+  @@index([technicianId])
+}
+
+// ============================================================
+// DIAGNOSTIC
+// ============================================================
+
+enum CheckResult {
+  NORMAL
+  TO_MONITOR
+  ANOMALY
+  CRITICAL
+  NOT_CHECKED
+}
+
+enum CheckCategory {
+  ENGINE
+  TRANSMISSION
+  BRAKING
+  SUSPENSION
+  STEERING
+  ELECTRICAL
+  ELECTRONICS
+  AIR_CONDITIONING
+  BATTERY
+  SAFETY
+}
+
+enum DiagnosticStatus {
+  IN_PROGRESS
+  COMPLETED
+  REPORT_PUBLISHED
+}
+
+model Diagnostic {
+  id             String   @id @default(cuid())
+  appointmentId  String
+  vehicleId      String
+  technicianId   String
+  mileageAtVisit Int?
+  symptoms       String?
+  status         DiagnosticStatus @default(IN_PROGRESS)
+  startedAt      DateTime @default(now())
+  completedAt    DateTime?
+
+  appointment    Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  vehicle        Vehicle     @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  technician     Technician  @relation(fields: [technicianId], references: [id])
+  checks         DiagnosticCheck[]
+  faultCodes     DiagnosticFaultCode[]
+  report         DiagnosticReport?
+  quotes         Quote[]
+
+  @@index([vehicleId])
+}
+
+model DiagnosticCheck {
+  id             String   @id @default(cuid())
+  diagnosticId   String
+  category       CheckCategory
+  result         CheckResult @default(NOT_CHECKED)
+  observation    String?
+
+  diagnostic     Diagnostic @relation(fields: [diagnosticId], references: [id], onDelete: Cascade)
+
+  @@unique([diagnosticId, category])
+}
+
+model DiagnosticFaultCode {
+  id             String   @id @default(cuid())
+  diagnosticId   String
+  device         String?
+  deviceBrand    String?
+  deviceModel    String?
+  system         String?
+  code           String
+  description    String?
+  measurement    String?
+  observation    String?
+  recommendation String?
+  createdAt      DateTime @default(now())
+
+  diagnostic     Diagnostic @relation(fields: [diagnosticId], references: [id], onDelete: Cascade)
+}
+
+enum SeverityLevel {
+  URGENT
+  UPCOMING
+  TO_MONITOR
+  NORMAL
+}
+
+model DiagnosticReport {
+  id             String   @id @default(cuid())
+  diagnosticId   String   @unique
+  reportNumber   String   @unique
+  conclusion     String?
+  severity       SeverityLevel @default(NORMAL)
+  publishedAt    DateTime?
+  publishedById  String?
+  createdAt      DateTime @default(now())
+
+  diagnostic     Diagnostic @relation(fields: [diagnosticId], references: [id], onDelete: Cascade)
+  photos         ReportPhoto[]
+}
+
+model ReportPhoto {
+  id             String   @id @default(cuid())
+  reportId       String
+  url            String
+  caption        String?
+
+  report         DiagnosticReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+}
+
+// ============================================================
+// DEVIS / ORDRES DE TRAVAIL
+// ============================================================
+
+enum QuoteStatus {
+  DRAFT
+  SENT
+  ACCEPTED
+  REJECTED
+  MODIFICATION_REQUESTED
+  EXPIRED
+}
+
+model Quote {
+  id              String   @id @default(cuid())
+  quoteNumber     String   @unique
+  diagnosticId    String
+  vehicleId       String
+  currentVersion  Int      @default(1)
+  status          QuoteStatus @default(DRAFT)
+  totalAmount     Decimal? @db.Decimal(12, 2)
+  currency        String   @default("XOF")
+  acceptedAt      DateTime?
+  acceptedById    String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  diagnostic      Diagnostic @relation(fields: [diagnosticId], references: [id])
+  vehicle         Vehicle    @relation(fields: [vehicleId], references: [id])
+  acceptedBy      Customer?  @relation("QuoteAcceptedBy", fields: [acceptedById], references: [id])
+  versions        QuoteVersion[]
+  workOrder       WorkOrder?
+
+  @@index([status])
+}
+
+model QuoteVersion {
+  id              String   @id @default(cuid())
+  quoteId         String
+  versionNumber   Int
+  laborAmount     Decimal? @db.Decimal(12, 2)
+  travelAmount    Decimal? @db.Decimal(12, 2)
+  discountAmount  Decimal? @db.Decimal(12, 2)
+  totalAmount     Decimal? @db.Decimal(12, 2)
+  leadTimeDays    Int?
+  terms           String?
+  createdAt       DateTime @default(now())
+
+  quote           Quote    @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  items           QuoteItem[]
+
+  @@unique([quoteId, versionNumber])
+}
+
+model QuoteItem {
+  id              String   @id @default(cuid())
+  quoteVersionId  String
+  partId          String?
+  label           String
+  quantity        Decimal  @default(1) @db.Decimal(10, 2)
+  unitPrice       Decimal  @db.Decimal(12, 2)
+
+  quoteVersion    QuoteVersion @relation(fields: [quoteVersionId], references: [id], onDelete: Cascade)
+  part            Part?    @relation(fields: [partId], references: [id])
+}
+
+enum WorkOrderStatus {
+  APPROVED_FOR_REPAIR
+  IN_PROGRESS
+  TRANSFER_TO_WORKSHOP
+  RECEIVED_AT_WORKSHOP
+  QUALITY_CONTROL
+  READY
+  DELIVERED
+  CANCELLED
+}
+
+model WorkOrder {
+  id              String   @id @default(cuid())
+  workOrderNumber String   @unique
+  quoteId         String   @unique
+  vehicleId       String
+  status          WorkOrderStatus @default(APPROVED_FOR_REPAIR)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  quote           Quote    @relation(fields: [quoteId], references: [id])
+  vehicle         Vehicle  @relation(fields: [vehicleId], references: [id])
+  tasks           WorkOrderTask[]
+  transfer        WorkshopTransfer?
+  invoice         Invoice?
+}
+
+enum WorkOrderTaskStatus {
+  PENDING
+  IN_PROGRESS
+  DONE
+}
+
+model WorkOrderTask {
+  id              String   @id @default(cuid())
+  workOrderId     String
+  label           String
+  status          WorkOrderTaskStatus @default(PENDING)
+  notes           String?
+  photoUrls       String[]
+  minutesSpent    Int?
+
+  workOrder       WorkOrder @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+}
+
+model WorkshopTransfer {
+  id              String   @id @default(cuid())
+  workOrderId     String   @unique
+  reason          String
+  vehicleCondition String?
+  photoUrls       String[]
+  destination     String?
+  transferredById String?
+  transferredAt   DateTime @default(now())
+  receivedAt      DateTime?
+
+  workOrder       WorkOrder @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+}
+
+// ============================================================
+// PIÈCES / STOCK
+// ============================================================
+
+model Supplier {
+  id          String   @id @default(cuid())
+  name        String
+  contact     String?
+  createdAt   DateTime @default(now())
+
+  parts       Part[]
+}
+
+model Part {
+  id          String   @id @default(cuid())
+  reference   String   @unique
+  name        String
+  supplierId  String?
+  purchasePrice Decimal? @db.Decimal(12, 2)
+  salePrice     Decimal? @db.Decimal(12, 2)
+  quality       String?
+  origin        String?
+  createdAt     DateTime @default(now())
+
+  supplier      Supplier? @relation(fields: [supplierId], references: [id])
+  inventory     Inventory?
+  quoteItems    QuoteItem[]
+}
+
+model Inventory {
+  id            String   @id @default(cuid())
+  partId        String   @unique
+  quantity      Int      @default(0)
+  threshold     Int      @default(0)
+  updatedAt     DateTime @updatedAt
+
+  part          Part     @relation(fields: [partId], references: [id], onDelete: Cascade)
+}
+
+// ============================================================
+// FACTURATION
+// ============================================================
+
+enum InvoiceStatus {
+  DRAFT
+  ISSUED
+  PARTIALLY_PAID
+  PAID
+  CANCELLED
+}
+
+model Invoice {
+  id              String   @id @default(cuid())
+  invoiceNumber   String   @unique
+  workOrderId     String?  @unique
+  customerId      String
+  vehicleId       String
+  amount          Decimal  @db.Decimal(12, 2)
+  currency        String   @default("XOF")
+  status          InvoiceStatus @default(DRAFT)
+  issuedAt        DateTime?
+  createdAt       DateTime @default(now())
+
+  workOrder       WorkOrder? @relation(fields: [workOrderId], references: [id])
+  customer        Customer   @relation(fields: [customerId], references: [id])
+  vehicle         Vehicle    @relation(fields: [vehicleId], references: [id])
+  payments        Payment[]
+}
+
+enum PaymentMethod {
+  CASH
+  MOBILE_MONEY
+  BANK_TRANSFER
+  OTHER
+}
+
+enum PaymentStatus {
+  PENDING
+  CONFIRMED
+  FAILED
+  REFUNDED
+}
+
+model Payment {
+  id              String   @id @default(cuid())
+  invoiceId       String
+  amount          Decimal  @db.Decimal(12, 2)
+  method          PaymentMethod
+  status          PaymentStatus @default(PENDING)
+  reference       String?
+  paidAt          DateTime?
+  createdAt       DateTime @default(now())
+
+  invoice         Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+}
+
+// ============================================================
+// CARNET NUMÉRIQUE / RAPPELS
+// ============================================================
+
+enum MaintenanceType {
+  OIL_CHANGE
+  FILTERS
+  BRAKES
+  BATTERY
+  TIMING_BELT
+  TECHNICAL_INSPECTION
+  PERIODIC_SERVICE
+}
+
+model MaintenancePlan {
+  id              String   @id @default(cuid())
+  vehicleId       String
+  type            MaintenanceType
+  intervalKm      Int?
+  intervalMonths  Int?
+  lastDoneAt      DateTime?
+  lastDoneMileage Int?
+  createdAt       DateTime @default(now())
+
+  vehicle         Vehicle  @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  reminders       MaintenanceReminder[]
+}
+
+enum ReminderStatus {
+  SCHEDULED
+  NOTIFIED
+  DONE
+  DISMISSED
+}
+
+model MaintenanceReminder {
+  id              String   @id @default(cuid())
+  vehicleId       String
+  planId          String?
+  type            MaintenanceType
+  dueAt           DateTime?
+  dueMileage      Int?
+  status          ReminderStatus @default(SCHEDULED)
+  createdAt       DateTime @default(now())
+
+  vehicle         Vehicle  @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  plan            MaintenancePlan? @relation(fields: [planId], references: [id])
+}
+
+// ============================================================
+// NOTIFICATIONS (WhatsApp / email / SMS)
+// ============================================================
+
+enum NotificationChannel {
+  WHATSAPP
+  EMAIL
+  SMS
+  IN_APP
+}
+
+enum NotificationEvent {
+  ACCOUNT_VERIFIED
+  REQUEST_RECEIVED
+  APPOINTMENT_ACCEPTED
+  APPOINTMENT_RESCHEDULED
+  TECHNICIAN_ASSIGNED
+  TECHNICIAN_EN_ROUTE
+  TECHNICIAN_ARRIVED
+  DIAGNOSTIC_COMPLETED
+  REPORT_AVAILABLE
+  QUOTE_AVAILABLE
+  QUOTE_ACCEPTED
+  REPAIR_COMPLETED
+  VEHICLE_READY
+  INVOICE_AVAILABLE
+  MAINTENANCE_REMINDER
+}
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  DELIVERED
+  FAILED
+}
+
+model NotificationTemplate {
+  id            String   @id @default(cuid())
+  event         NotificationEvent @unique
+  channel       NotificationChannel @default(WHATSAPP)
+  bodyTemplate  String
+  isActive      Boolean  @default(true)
+  updatedAt     DateTime @updatedAt
+}
+
+model Notification {
+  id            String   @id @default(cuid())
+  userId        String
+  event         NotificationEvent
+  channel       NotificationChannel
+  status        NotificationStatus @default(PENDING)
+  payload       Json?
+  sentAt        DateTime?
+  createdAt     DateTime @default(now())
+
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+// ============================================================
+// AUDIT
+// ============================================================
+
+model AuditLog {
+  id            String   @id @default(cuid())
+  userId        String?
+  action        String
+  entity        String
+  entityId      String
+  oldValue      Json?
+  newValue      Json?
+  createdAt     DateTime @default(now())
+
+  user          User?    @relation("AuditLogActor", fields: [userId], references: [id])
+
+  @@index([entity, entityId])
+  @@index([userId])
+}

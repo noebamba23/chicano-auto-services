@@ -1,0 +1,29 @@
+@import "tailwindcss";
+
+:root {
+  --chicano-black: #0b0c0e;
+  --chicano-black-soft: #17191d;
+  --chicano-red: #e1121b;
+  --chicano-red-dark: #b30d14;
+  --chicano-white: #ffffff;
+  --chicano-gray: #6b7178;
+  --chicano-gray-light: #f3f4f6;
+  --chicano-gray-steel: #3a3f46;
+}
+
+@theme inline {
+  --color-chicano-black: var(--chicano-black);
+  --color-chicano-black-soft: var(--chicano-black-soft);
+  --color-chicano-red: var(--chicano-red);
+  --color-chicano-red-dark: var(--chicano-red-dark);
+  --color-chicano-white: var(--chicano-white);
+  --color-chicano-gray: var(--chicano-gray);
+  --color-chicano-gray-light: var(--chicano-gray-light);
+  --color-chicano-gray-steel: var(--chicano-gray-steel);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  font-family: var(--font-sans), Arial, Helvetica, sans-serif;
+}
