@@ -10,8 +10,8 @@ Ne pas paralléliser les phases : chacune se construit sur la précédente.
 | P2 | Client + véhicules | ✅ Fait — voir `VEHICLES.md` ; validé contre PostgreSQL réel (Neon) en P2.5 |
 | P2.5 | Validation PostgreSQL réel (Neon) | ✅ Fait — migration initiale appliquée, auth + véhicules + ownership validés en conditions réelles |
 | P3 | Demandes + urgence + géolocalisation + rendez-vous | ✅ Fait — voir `SERVICE-REQUESTS.md` |
-| P4 | Production (suite) + Kanban + calendrier | ⏳ À faire — le Control Center P3 n'a qu'une liste filtrée ; Kanban/calendrier restent à construire |
-| P5 | Technicien + diagnostic | ⏳ À faire |
+| P4 | Production (suite) + Kanban + calendrier + affectation technicien basique | ✅ Fait — voir `SERVICE-REQUESTS.md` (section Phase 4) |
+| P5 | Application technicien complète + diagnostic | ⏳ À faire |
 | P6 | Rapport + devis | ⏳ À faire |
 | P7 | Validation + réparation + clôture | ⏳ À faire |
 | P8 | Historique + rappels | ⏳ À faire |
@@ -126,10 +126,39 @@ application technicien complète, Kanban/calendrier production, réponse client 
 contre-proposition de créneau, marqueur de carte déplaçable — voir
 `SERVICE-REQUESTS.md` pour le détail de chaque limite assumée.
 
+## Détail Phase 4 (livrée)
+
+- Kanban (`/production/kanban`) : colonnes = statuts `ServiceRequest` réellement
+  pilotables (Nouvelles, En examen, Nouveau créneau proposé, Planifiées, Terminées)
+  + section compacte Refusées/Annulées. Interaction par clic (pas de
+  glisser-déposer) — chaque carte ouvre la fiche demande où vivent les actions déjà
+  auditées en Phase 3.
+- Calendrier (`/production/calendrier`) : vue semaine, grille créneau × jour,
+  navigation précédent/suivant.
+- Deux nouvelles transitions exposées (déjà prévues dans `ALLOWED_TRANSITIONS`
+  depuis la Phase 3, jusqu'ici inutilisées) : « Mettre en examen »
+  (`SUBMITTED → UNDER_REVIEW`) et « Marquer terminée » (`ACCEPTED → COMPLETED`,
+  ferme aussi l'`Appointment` lié).
+- Affectation technicien basique (`/production/techniciens`, formulaire sur la
+  fiche demande) : `TechnicianAssignment` posé en Phase 0, aucun changement de
+  schéma. Empêche la double réservation d'un même technicien sur un même
+  date+créneau ; réaffectation conservée en historique (`status = REASSIGNED`,
+  jamais supprimée).
+- 12 nouveaux tests unitaires (transitions Kanban, affectation, double
+  réservation) — 73 au total.
+- Documentation : section dédiée dans `docs/SERVICE-REQUESTS.md`.
+
+## Non couvert par la Phase 4 (volontairement)
+
+Application technicien complète (JE PARS/ARRIVÉ, diagnostic terrain), vue
+calendrier mois, glisser-déposer Kanban, diagnostic/rapport/devis/réparation/
+facturation — voir `SERVICE-REQUESTS.md` pour le détail.
+
 ## PostgreSQL
 
 Résolu en Phase 2.5 : Docker Desktop restait bloqué sur cette machine (jamais
 dépassé son initialisation depuis l'installation) — contournement définitif via
 **Neon** (PostgreSQL cloud), `DATABASE_URL` pointant vers un projet Neon réel depuis
-lors. Toutes les migrations (P2.5 et P3) ont été appliquées et validées contre cette
-base réelle, pas contre un mock.
+lors. Toutes les migrations (P2.5, P3 — aucune nouvelle migration en P4, le schéma
+existant suffisait) ont été appliquées et validées contre cette base réelle, pas
+contre un mock.

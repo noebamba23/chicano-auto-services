@@ -52,10 +52,13 @@ src/
         page.tsx                  Mes demandes (liste)
         [id]/page.tsx              Détail + annulation
     production/
-      layout.tsx                   Garde RBAC (PRODUCTION_STAFF/ADMIN/SUPER_ADMIN), dark mode
+      layout.tsx                   Garde RBAC (PRODUCTION_STAFF/ADMIN/SUPER_ADMIN), dark mode, nav (P4)
       demandes/
         page.tsx                   Control Center — liste filtrée
-        [id]/page.tsx              Fiche + Accepter/Refuser/Demander autre créneau
+        [id]/page.tsx              Fiche + actions + affectation technicien (P4)
+      kanban/page.tsx              Colonnes = statuts pilotables, clic → fiche (P4)
+      calendrier/page.tsx          Vue semaine, créneau × jour (P4)
+      techniciens/page.tsx         Liste lecture seule (P4)
     api/
       auth/
         register/route.ts

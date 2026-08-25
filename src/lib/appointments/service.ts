@@ -30,3 +30,20 @@ export async function getAppointmentForCustomer(customerId: string, id: string) 
   if (!appointment) throw new ServiceRequestNotFoundError();
   return appointment;
 }
+
+// Vue calendrier production (Phase 4) — pas de filtre ownership, gardée par
+// RBAC au niveau de la page (requireProductionRole).
+export function listAppointmentsInRange(start: Date, end: Date) {
+  return db.appointment.findMany({
+    where: {
+      scheduledDate: { gte: start, lt: end },
+      status: { notIn: ["CANCELLED"] },
+    },
+    include: {
+      vehicle: true,
+      customer: { include: { user: { select: { firstName: true, lastName: true } } } },
+      serviceRequest: { select: { referenceNumber: true, category: true, isUrgent: true } },
+    },
+    orderBy: { scheduledDate: "asc" },
+  });
+}

@@ -1,4 +1,8 @@
-# Demandes de service, urgence, géolocalisation, rendez-vous — Phase 3
+# Demandes de service, urgence, géolocalisation, rendez-vous — Phase 3 (+ Phase 4)
+
+> La section [Phase 4](#phase-4--kanban-calendrier-affectation-technicien) en fin de
+> document couvre les ajouts Control Center (Kanban, calendrier, affectation
+> technicien basique). Tout ce qui précède date de la Phase 3 et reste inchangé.
 
 ## Modèle métier — trois concepts distincts
 
@@ -156,3 +160,65 @@ en Phase 2) est réutilisé tel quel — `SERVICE_REQUEST_CREATED`,
   action dédiée d'acceptation n'est exposée — en pratique le suivi se fait par
   contact direct, cohérent avec une petite équipe de lancement.
 - Marqueur de carte déplaçable (voir section MapService).
+
+## Phase 4 — Kanban, calendrier, affectation technicien
+
+Aucun changement de schéma : tous les modèles nécessaires (`Technician`,
+`TechnicianAssignment`) étaient déjà posés en Phase 0. Deux nouvelles transitions
+`ServiceRequestStatus` exposées, déjà présentes dans `ALLOWED_TRANSITIONS` depuis la
+Phase 3 mais jusqu'ici inutilisées :
+
+- `SUBMITTED → UNDER_REVIEW` (« Mettre en examen ») — colonne intermédiaire du
+  Kanban, optionnelle : accepter/refuser restent directement utilisables depuis
+  `SUBMITTED`.
+- `ACCEPTED → COMPLETED` (« Marquer terminée ») — clôture administrative. **Ne
+  prétend pas** qu'un diagnostic ou une réparation a été effectué (hors périmètre) ;
+  ferme simplement le cycle demande → rendez-vous une fois l'intervention terminée
+  sur le terrain. Met aussi `Appointment.status = COMPLETED`.
+
+### Kanban (`/production/kanban`)
+
+Colonnes = `ServiceRequestStatus` réellement pilotables aujourd'hui (Nouvelles,
+En examen, Nouveau créneau proposé, Planifiées, Terminées), pas la chaîne complète
+diagnostic/devis/réparation de la section 45 du prompt maître d'origine — ces
+étapes n'existent pas encore. Interaction **par clic, pas de glisser-déposer** :
+chaque carte ouvre la fiche demande où vivent déjà les actions auditées
+(accepter/refuser/replanifier/mettre en examen/terminer). Décision délibérée pour
+ne pas ajouter de dépendance DnD et pour ne jamais permettre un changement de statut
+qui contournerait `ALLOWED_TRANSITIONS`.
+
+### Calendrier (`/production/calendrier`)
+
+Vue semaine (grille créneau × jour, créneaux = `SERVICE_SLOTS`), navigation
+précédent/suivant par `?week=`. Alimenté par `listAppointmentsInRange()`
+(`src/lib/appointments/service.ts`) — pas de vue mois dans cette phase.
+
+### Affectation technicien (`src/lib/technicians/service.ts`)
+
+Prépare `Technician`/`TechnicianAssignment` pour la future application technicien
+complète, sans la construire (section "TECHNICIENS" du prompt Phase 3, reconduite
+telle quelle). `assignTechnician()` :
+
+- exige un `Appointment` existant (donc une demande déjà **acceptée**) ;
+- **empêche la double réservation** au niveau du technicien — pas du créneau
+  global : deux clients différents peuvent légitimement partager un créneau tant
+  qu'ils sont servis par des techniciens distincts. Vérifié en comparant
+  `scheduledDate`+`scheduledSlot` des `TechnicianAssignment` actives (`status ≠
+  REASSIGNED`) du technicien ciblé ;
+- réaffecter ne supprime pas l'ancienne affectation : elle passe à `REASSIGNED`
+  (historique conservé, section "HISTORIQUE") ;
+- fait passer `Appointment.status` à `ASSIGNED` (valeur déjà présente dans
+  `AppointmentStatus` depuis la Phase 0, jamais utilisée jusqu'ici) et envoie la
+  notification `TECHNICIAN_ASSIGNED` (déjà existante depuis le seed Phase 0).
+
+Deux techniciens de démonstration seedés (`prisma/seed.ts`, comptes `DEMO
+TECHNICIEN A/B`, aucune donnée réelle) pour pouvoir tester l'affectation sans
+construire un flux d'inscription technicien — hors périmètre de cette phase.
+
+### Non couvert par la Phase 4 (volontairement)
+
+- Application technicien (JE PARS / ARRIVÉ / diagnostic terrain) — `Technician`
+  n'a aujourd'hui aucune interface propre, seulement une fiche en lecture côté
+  production (`/production/techniciens`).
+- Vue calendrier mois, glisser-déposer Kanban.
+- Diagnostic, rapport, devis, réparation, facturation (inchangé depuis la Phase 3).

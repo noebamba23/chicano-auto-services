@@ -359,6 +359,51 @@ export async function requestReschedule(
   return getServiceRequestForProduction(id);
 }
 
+// Fait passer une demande en qualification (section "Kanban" de la Phase 4 —
+// colonne intermédiaire entre "nouvelle demande" et la décision
+// accepter/refuser). Optionnel dans le flux : accept/reject restent
+// directement utilisables depuis SUBMITTED (voir ALLOWED_TRANSITIONS).
+export async function markUnderReview(id: string) {
+  const existing = await db.serviceRequest.findUnique({ where: { id } });
+  if (!existing) throw new ServiceRequestNotFoundError();
+  assertTransition(existing.status, "UNDER_REVIEW");
+
+  await db.$transaction([
+    db.serviceRequest.update({ where: { id }, data: { status: "UNDER_REVIEW" } }),
+    db.auditLog.create({
+      data: { action: "SERVICE_REQUEST_UNDER_REVIEW", entity: "ServiceRequest", entityId: id },
+    }),
+  ]);
+
+  return getServiceRequestForProduction(id);
+}
+
+// Clôture administrative d'une demande acceptée (colonne "Terminées" du
+// Kanban Phase 4). Ne prétend pas qu'un diagnostic ou une réparation a été
+// effectué — hors périmètre tant que ces modules ne sont pas construits
+// (voir docs/SERVICE-REQUESTS.md) ; ferme simplement le cycle
+// demande → rendez-vous une fois l'intervention terminée sur le terrain.
+export async function completeServiceRequest(id: string) {
+  const existing = await db.serviceRequest.findUnique({ where: { id } });
+  if (!existing) throw new ServiceRequestNotFoundError();
+  assertTransition(existing.status, "COMPLETED");
+
+  return db.$transaction(async (tx) => {
+    const completed = await tx.serviceRequest.update({ where: { id }, data: { status: "COMPLETED" } });
+
+    const appointment = await tx.appointment.findUnique({ where: { serviceRequestId: id } });
+    if (appointment) {
+      await tx.appointment.update({ where: { id: appointment.id }, data: { status: "COMPLETED" } });
+    }
+
+    await tx.auditLog.create({
+      data: { action: "SERVICE_REQUEST_COMPLETED", entity: "ServiceRequest", entityId: id },
+    });
+
+    return completed;
+  }, TRANSACTION_OPTIONS);
+}
+
 export async function addServiceRequestAttachment(
   customerId: string,
   serviceRequestId: string,

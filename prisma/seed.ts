@@ -1,4 +1,4 @@
-import { PrismaClient, NotificationEvent, NotificationChannel } from "@prisma/client";
+import { PrismaClient, NotificationEvent, NotificationChannel, TechnicianSkill } from "@prisma/client";
 import bcrypt from "bcryptjs";
 
 const db = new PrismaClient();
@@ -59,6 +59,37 @@ async function main() {
     console.log(`Compte super admin créé : ${adminPhone} / ChangeMe123! (à changer immédiatement)`);
   } else {
     console.log("Compte super admin déjà présent, aucune modification.");
+  }
+
+  // Techniciens de démonstration (Phase 4 — affectation basique). Aucune
+  // donnée réelle, comptes clairement identifiés DEMO.
+  const demoTechnicians: { phone: string; firstName: string; lastName: string; skills: TechnicianSkill[] }[] = [
+    { phone: "+22370000030", firstName: "DEMO", lastName: "TECHNICIEN A", skills: ["MECHANICAL", "DIAGNOSTIC"] },
+    { phone: "+22370000031", firstName: "DEMO", lastName: "TECHNICIEN B", skills: ["ELECTRICAL", "ELECTRONICS"] },
+  ];
+
+  for (const t of demoTechnicians) {
+    const existingUser = await db.user.findUnique({ where: { phoneE164: t.phone } });
+    if (existingUser) {
+      console.log(`Technicien déjà présent : ${t.phone}, aucune modification.`);
+      continue;
+    }
+    await db.user.create({
+      data: {
+        firstName: t.firstName,
+        lastName: t.lastName,
+        phoneRaw: t.phone,
+        phoneE164: t.phone,
+        passwordHash: await bcrypt.hash("ChangeMe123!", 12),
+        role: "TECHNICIAN",
+        status: "VERIFIED",
+        whatsappVerified: true,
+        whatsappVerifiedAt: new Date(),
+        termsAcceptedAt: new Date(),
+        technicianProfile: { create: { skills: t.skills } },
+      },
+    });
+    console.log(`Technicien créé : ${t.phone} / ChangeMe123!`);
   }
 }
 

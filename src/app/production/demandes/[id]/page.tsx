@@ -9,6 +9,8 @@ import {
   urgencyReasonLabel,
 } from "@/lib/service-requests/options";
 import { ServiceRequestActions } from "@/components/production/service-request-actions";
+import { AssignTechnicianForm } from "@/components/production/assign-technician-form";
+import { listTechnicians, getActiveAssignmentForAppointment } from "@/lib/technicians/service";
 
 export default async function ProductionServiceRequestPage({
   params,
@@ -97,9 +99,32 @@ export default async function ProductionServiceRequestPage({
         </section>
       )}
 
+      {request.appointment && (request.status === "ACCEPTED" || request.status === "COMPLETED") && (
+        <TechnicianSection appointmentId={request.appointment.id} requestId={request.id} />
+      )}
+
       <div className="mt-6">
         <ServiceRequestActions requestId={request.id} status={request.status} />
       </div>
+    </div>
+  );
+}
+
+async function TechnicianSection({ appointmentId, requestId }: { appointmentId: string; requestId: string }) {
+  const [technicians, assignment] = await Promise.all([
+    listTechnicians(),
+    getActiveAssignmentForAppointment(appointmentId),
+  ]);
+
+  return (
+    <div className="mt-6">
+      <AssignTechnicianForm
+        requestId={requestId}
+        technicians={technicians.map((t) => ({ id: t.id, user: t.user }))}
+        currentTechnicianName={
+          assignment ? `${assignment.technician.user.firstName} ${assignment.technician.user.lastName}` : null
+        }
+      />
     </div>
   );
 }

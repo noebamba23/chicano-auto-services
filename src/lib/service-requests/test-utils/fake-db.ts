@@ -17,6 +17,12 @@ function matches(row: Row, where: Record<string, unknown>): boolean {
       if (matches(row, condition as Record<string, unknown>)) return false;
       continue;
     }
+    // Raccourci Prisma par champ : { status: { not: "X" } }, distinct du NOT
+    // de premier niveau (objet de condition complet) géré ci-dessus.
+    if (condition !== null && typeof condition === "object" && "not" in condition) {
+      if (row[key] === (condition as { not: unknown }).not) return false;
+      continue;
+    }
     if (row[key] !== condition) return false;
   }
   return true;
@@ -44,6 +50,8 @@ export function createFakeDb() {
   let appointments: Row[] = [];
   let appointmentLocations: Row[] = [];
   let auditLogs: Row[] = [];
+  let technicians: Row[] = [];
+  let technicianAssignments: Row[] = [];
   let nextSrSequence = 1;
 
   function withRequestExtras(row: Row) {
@@ -170,6 +178,53 @@ export function createFakeDb() {
 
   const auditLogModel = genericModel({ get: () => auditLogs, set: (r) => (auditLogs = r) }, {});
 
+  const technicianModel = {
+    ...genericModel({ get: () => technicians, set: (r) => (technicians = r) }, {}),
+    async findMany() {
+      return technicians.map((t) => ({ ...t, user: t.user }));
+    },
+  };
+
+  // technicianAssignment.findFirst nécessite de filtrer sur des champs de
+  // l'Appointment lié (relation imbriquée) : la fonction matches() générique
+  // ne fait que de l'égalité de champs plats, donc implémentation dédiée ici
+  // plutôt que forcée dans le matcher générique (section "TECHNICIENS" de la
+  // Phase 4 : test de non-double-réservation).
+  const technicianAssignmentModel = {
+    async create({ data }: { data: Record<string, unknown> }) {
+      const row: Row = { id: randomUUID(), createdAt: new Date(), status: "ASSIGNED", ...data } as Row;
+      technicianAssignments.push(row);
+      return row;
+    },
+    async updateMany({ where, data }: { where: Record<string, unknown>; data: Record<string, unknown> }) {
+      const rows = technicianAssignments.filter((r) => matches(r, where));
+      for (const row of rows) Object.assign(row, data);
+      return { count: rows.length };
+    },
+    async findFirst({
+      where,
+    }: {
+      where: {
+        technicianId: string;
+        status?: { not: string };
+        appointment: { scheduledDate: unknown; scheduledSlot: unknown; id: { not: string } };
+      };
+    }) {
+      const found = technicianAssignments.find((ta) => {
+        if (ta.technicianId !== where.technicianId) return false;
+        if (where.status?.not && ta.status === where.status.not) return false;
+        const apt = appointments.find((a) => a.id === ta.appointmentId);
+        if (!apt) return false;
+        if (apt.id === where.appointment.id.not) return false;
+        if (+new Date(apt.scheduledDate as string) !== +new Date(where.appointment.scheduledDate as string))
+          return false;
+        if (apt.scheduledSlot !== where.appointment.scheduledSlot) return false;
+        return true;
+      });
+      return found ?? null;
+    },
+  };
+
   const fakeDb = {
     vehicle: vehicleModel,
     customer: customerModel,
@@ -178,6 +233,8 @@ export function createFakeDb() {
     appointment: appointmentModel,
     appointmentLocation: appointmentLocationModel,
     auditLog: auditLogModel,
+    technician: technicianModel,
+    technicianAssignment: technicianAssignmentModel,
     async $transaction(fnOrArray: unknown) {
       if (typeof fnOrArray === "function") {
         return (fnOrArray as (tx: typeof fakeDb) => unknown)(fakeDb);
@@ -191,8 +248,12 @@ export function createFakeDb() {
     _seedCustomer(row: { id: string; userId: string }) {
       customers.push(row as Row);
     },
+    _seedTechnician(row: { id: string; user: { firstName: string; lastName: string } }) {
+      technicians.push({ skills: [], isAvailable: true, ...row } as Row);
+    },
     _serviceRequests: serviceRequests,
     _appointments: appointments,
+    _technicianAssignments: technicianAssignments,
     _reset() {
       vehicles = [];
       customers = [];
@@ -201,9 +262,12 @@ export function createFakeDb() {
       appointments = [];
       appointmentLocations = [];
       auditLogs = [];
+      technicians = [];
+      technicianAssignments = [];
       nextSrSequence = 1;
       fakeDb._serviceRequests = serviceRequests;
       fakeDb._appointments = appointments;
+      fakeDb._technicianAssignments = technicianAssignments;
     },
   };
 

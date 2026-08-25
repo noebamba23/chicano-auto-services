@@ -20,6 +20,8 @@ const {
   acceptServiceRequest,
   rejectServiceRequest,
   requestReschedule,
+  markUnderReview,
+  completeServiceRequest,
   ServiceRequestNotFoundError,
   ServiceRequestConflictError,
 } = await import("./service");
@@ -149,5 +151,44 @@ describe("relation ServiceRequest → Appointment", () => {
     });
     expect(result.appointment?.serviceRequestId).toBe(request.id);
     expect(result.appointment?.customerId).toBe(CUSTOMER_A);
+  });
+});
+
+describe("Kanban Phase 4 — mise en examen et clôture", () => {
+  it("SUBMITTED → UNDER_REVIEW autorisé", async () => {
+    const request = await createServiceRequest(CUSTOMER_A, VALID_INPUT);
+    const result = await markUnderReview(request.id);
+    expect(result.status).toBe("UNDER_REVIEW");
+  });
+
+  it("UNDER_REVIEW → ACCEPTED reste possible après mise en examen", async () => {
+    const request = await createServiceRequest(CUSTOMER_A, VALID_INPUT);
+    await markUnderReview(request.id);
+    const result = await acceptServiceRequest(request.id, {
+      scheduledDate: "2026-09-01",
+      scheduledSlot: "08:00-10:00",
+    });
+    expect(result.status).toBe("ACCEPTED");
+  });
+
+  it("ACCEPTED → COMPLETED clôture la demande et l'Appointment lié", async () => {
+    const request = await createServiceRequest(CUSTOMER_A, VALID_INPUT);
+    await acceptServiceRequest(request.id, { scheduledDate: "2026-09-01", scheduledSlot: "08:00-10:00" });
+    const result = await completeServiceRequest(request.id);
+    expect(result.status).toBe("COMPLETED");
+
+    const reloaded = await getServiceRequestForCustomer(CUSTOMER_A, request.id);
+    expect(reloaded.appointment?.status).toBe("COMPLETED");
+  });
+
+  it("refuse de clôturer une demande qui n'a pas été acceptée", async () => {
+    const request = await createServiceRequest(CUSTOMER_A, VALID_INPUT);
+    await expect(completeServiceRequest(request.id)).rejects.toThrow(ServiceRequestConflictError);
+  });
+
+  it("refuse de mettre en examen une demande déjà refusée", async () => {
+    const request = await createServiceRequest(CUSTOMER_A, VALID_INPUT);
+    await rejectServiceRequest(request.id, "test");
+    await expect(markUnderReview(request.id)).rejects.toThrow(ServiceRequestConflictError);
   });
 });

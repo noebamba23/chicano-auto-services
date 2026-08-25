@@ -16,8 +16,16 @@ export function ServiceRequestActions({ requestId, status }: { requestId: string
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const canAct = ["SUBMITTED", "UNDER_REVIEW", "RESCHEDULE_REQUESTED"].includes(status);
+  const canAct = ["SUBMITTED", "UNDER_REVIEW", "RESCHEDULE_REQUESTED", "ACCEPTED"].includes(status);
   if (!canAct) return null;
+
+  async function submitReview() {
+    await run("review", {});
+  }
+
+  async function submitComplete() {
+    await run("complete", {});
+  }
 
   async function submitAccept() {
     if (!date || !slot) {
@@ -39,7 +47,10 @@ export function ServiceRequestActions({ requestId, status }: { requestId: string
     await run("reject", { reason });
   }
 
-  async function run(action: "accept" | "reject" | "reschedule", body: Record<string, unknown>) {
+  async function run(
+    action: "accept" | "reject" | "reschedule" | "review" | "complete",
+    body: Record<string, unknown>
+  ) {
     setLoading(true);
     setError(null);
     const res = await fetch(`/api/service-requests/${requestId}/${action}`, {
@@ -143,25 +154,48 @@ export function ServiceRequestActions({ requestId, status }: { requestId: string
   }
 
   return (
-    <div className="flex flex-wrap gap-2">
-      <button
-        onClick={() => setMode("accept")}
-        className="rounded-md bg-chicano-red px-4 py-2 text-sm font-semibold text-white hover:bg-chicano-red-dark"
-      >
-        Accepter
-      </button>
-      <button
-        onClick={() => setMode("reject")}
-        className="rounded-md border border-white/20 px-4 py-2 text-sm font-semibold text-white hover:bg-white/10"
-      >
-        Refuser
-      </button>
-      <button
-        onClick={() => setMode("reschedule")}
-        className="rounded-md border border-white/20 px-4 py-2 text-sm font-semibold text-white hover:bg-white/10"
-      >
-        Demander autre créneau
-      </button>
+    <div className="flex flex-wrap items-center gap-2">
+      {status === "SUBMITTED" && (
+        <button
+          onClick={submitReview}
+          disabled={loading}
+          className="rounded-md border border-white/20 px-4 py-2 text-sm font-semibold text-white hover:bg-white/10 disabled:opacity-60"
+        >
+          {loading ? "..." : "Mettre en examen"}
+        </button>
+      )}
+      {status !== "ACCEPTED" && (
+        <>
+          <button
+            onClick={() => setMode("accept")}
+            className="rounded-md bg-chicano-red px-4 py-2 text-sm font-semibold text-white hover:bg-chicano-red-dark"
+          >
+            Accepter
+          </button>
+          <button
+            onClick={() => setMode("reject")}
+            className="rounded-md border border-white/20 px-4 py-2 text-sm font-semibold text-white hover:bg-white/10"
+          >
+            Refuser
+          </button>
+          <button
+            onClick={() => setMode("reschedule")}
+            className="rounded-md border border-white/20 px-4 py-2 text-sm font-semibold text-white hover:bg-white/10"
+          >
+            Demander autre créneau
+          </button>
+        </>
+      )}
+      {status === "ACCEPTED" && (
+        <button
+          onClick={submitComplete}
+          disabled={loading}
+          className="rounded-md bg-chicano-red px-4 py-2 text-sm font-semibold text-white hover:bg-chicano-red-dark disabled:opacity-60"
+        >
+          {loading ? "..." : "Marquer terminée"}
+        </button>
+      )}
+      {error && <p className="w-full text-sm text-red-400">{error}</p>}
     </div>
   );
 }
