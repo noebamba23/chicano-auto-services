@@ -8,6 +8,8 @@ import { getSession } from "@/lib/auth/session";
 
 const PROTECTED_PREFIXES = ["/espace-client", "/production", "/admin"];
 const AUTH_ONLY_PAGES = ["/connexion", "/inscription"];
+const PRODUCTION_PREFIXES = ["/production", "/admin"];
+const PRODUCTION_ROLES = ["PRODUCTION_STAFF", "ADMIN", "SUPER_ADMIN"];
 
 export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
@@ -38,6 +40,20 @@ export async function proxy(req: NextRequest) {
     if (session.status === "PENDING_VERIFICATION" && pathname !== "/verification-whatsapp") {
       const url = req.nextUrl.clone();
       url.pathname = "/verification-whatsapp";
+      url.search = "";
+      return NextResponse.redirect(url);
+    }
+
+    // Un client authentifié et vérifié ne doit jamais atteindre l'espace
+    // production (section "PRODUCTION ACCESS" de la Phase 3) — contrôle
+    // autoritaire redondant avec requireProductionRole() côté API/pages,
+    // ici pour une redirection rapide plutôt qu'une page d'erreur.
+    if (
+      PRODUCTION_PREFIXES.some((p) => pathname.startsWith(p)) &&
+      !PRODUCTION_ROLES.includes(session.role)
+    ) {
+      const url = req.nextUrl.clone();
+      url.pathname = "/espace-client";
       url.search = "";
       return NextResponse.redirect(url);
     }

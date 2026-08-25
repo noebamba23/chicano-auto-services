@@ -2,6 +2,11 @@ import { NextResponse } from "next/server";
 import { ZodError } from "zod";
 import { UnauthenticatedError, UnverifiedAccountError } from "@/lib/vehicles/guard";
 import { VehicleNotFoundError, VehicleConflictError } from "@/lib/vehicles/service";
+import { ForbiddenRoleError } from "@/lib/rbac";
+import {
+  ServiceRequestNotFoundError,
+  ServiceRequestConflictError,
+} from "@/lib/service-requests/service";
 
 // Catalogue d'erreurs HTTP de l'API (section 13 de la Phase 2) :
 //   400 Données invalides         — payload rejeté par un schéma zod
@@ -41,6 +46,9 @@ export function jsonFromKnownError(err: unknown) {
   if (err instanceof UnverifiedAccountError) return jsonError(err.message, 403);
   if (err instanceof VehicleNotFoundError) return jsonError(err.message, 404);
   if (err instanceof VehicleConflictError) return jsonError(err.message, 409);
+  if (err instanceof ForbiddenRoleError) return jsonError(err.message, 403);
+  if (err instanceof ServiceRequestNotFoundError) return jsonError(err.message, 404);
+  if (err instanceof ServiceRequestConflictError) return jsonError(err.message, 409);
   return null;
 }
 

@@ -1,8 +1,10 @@
-# CHICANO AUTO SERVICES — Architecture (Phase 0 + Phase 1 + Phase 2)
+# CHICANO AUTO SERVICES — Architecture (Phase 0 à Phase 3)
 
 Ce document répond aux points 1 à 11 de la section 71 du cahier des charges
 (« Première étape — avant de coder ») pour l'état actuel du projet. Le détail
-spécifique à la gestion des véhicules (Phase 2) est dans [`VEHICLES.md`](VEHICLES.md).
+spécifique à la gestion des véhicules (Phase 2) est dans [`VEHICLES.md`](VEHICLES.md),
+celui des demandes de service/rendez-vous (Phase 3) dans
+[`SERVICE-REQUESTS.md`](SERVICE-REQUESTS.md).
 
 ## 1. Stack actuelle
 
@@ -16,7 +18,10 @@ dans cette session :
 - **PostgreSQL** via **Prisma ORM v6** (la v7, tout juste sortie, impose une refonte
   de configuration `prisma.config.ts` + adaptateur pilote encore instable pour un
   MVP — décision d'architecture : rester sur la v6, stable et documentée, jusqu'à
-  maturation de la v7).
+  maturation de la v7). Base réelle hébergée sur **Neon** (PostgreSQL cloud) depuis
+  la Phase 2.5 — Docker Desktop local restant bloqué sur cette machine (jamais
+  dépassé son initialisation depuis l'installation), contourné définitivement via
+  Neon plutôt que de bloquer le projet.
 - **Auth maison** : session JWT (`jose`) en cookie httpOnly, mots de passe hashés
   `bcryptjs`. Section 61 proposait Supabase Auth ; sans compte Supabase configuré,
   une solution auto-hébergée équivalente (mêmes garanties : hachage fort, session
@@ -42,7 +47,15 @@ src/
         nouveau/page.tsx           Ajouter mon véhicule
         [id]/page.tsx              Fiche véhicule (identité + actions + historique)
         [id]/modifier/page.tsx     Modifier mon véhicule
-      demande-service/page.tsx    Route réelle (ownership vérifiée) pour Diagnostic/Entretien, préparée pour la Phase 3
+      demande-service/page.tsx    Assistant de demande (8 étapes, ServiceRequestWizard) — vehicleId requis
+      demandes/
+        page.tsx                  Mes demandes (liste)
+        [id]/page.tsx              Détail + annulation
+    production/
+      layout.tsx                   Garde RBAC (PRODUCTION_STAFF/ADMIN/SUPER_ADMIN), dark mode
+      demandes/
+        page.tsx                   Control Center — liste filtrée
+        [id]/page.tsx              Fiche + Accepter/Refuser/Demander autre créneau
     api/
       auth/
         register/route.ts
@@ -57,7 +70,21 @@ src/
         [id]/set-primary/route.ts  POST
         [id]/archive/route.ts      POST
         [id]/photo/route.ts        POST (multipart, upload photo)
-  proxy.ts                          Garde d'accès (Node.js runtime, Next 16)
+      service-requests/
+        route.ts                   GET (liste mine) / POST (création)
+        [id]/route.ts              GET / PATCH (édition restreinte, statut SUBMITTED uniquement)
+        [id]/cancel/route.ts       POST (client)
+        [id]/accept/route.ts       POST (RBAC production)
+        [id]/reject/route.ts       POST (RBAC production)
+        [id]/reschedule/route.ts   POST (RBAC production)
+        [id]/attachments/route.ts  POST (multipart, photo/vidéo)
+      appointments/
+        route.ts                   GET (liste mine) — pas de POST, voir SERVICE-REQUESTS.md
+        [id]/route.ts              GET
+      production/service-requests/
+        route.ts                   GET (toutes, filtres, RBAC)
+        [id]/route.ts              GET (détail, RBAC)
+  proxy.ts                          Garde d'accès (Node.js runtime, Next 16) — inclut le contrôle de rôle sur /production
   lib/
     db.ts                           Client Prisma singleton
     http.ts                         Helpers de réponse JSON (dont mapping d'erreurs métier → HTTP)
@@ -90,16 +117,39 @@ src/
       provider.ts                   Interface StorageProvider
       get-provider.ts               Sélection local/s3 par env
       providers/local-storage-provider.ts  Écrit réellement sous public/uploads
+    service-requests/
+      service.ts                    ServiceRequest + Appointment (accept crée l'Appointment)
+      service.test.ts
+      options.ts                    Libellés/valeurs + créneaux configurables (SERVICE_SLOTS)
+      reference.ts                  Génération CHC-SR-000001
+      test-utils/fake-db.ts         Fake db dédié (séparé de celui des véhicules, par prudence)
+    appointments/
+      service.ts                    Lecture seule (ownership) — pas de création directe
+    notifications/
+      service.ts                    NotificationService.send() — template + WhatsAppProvider existant
+    maps/
+      provider.ts                   Interface MapProvider
+      get-provider.ts
+      providers/openstreetmap-provider.ts  MVP sans dépendance ni clé API
+    rbac.ts                          requireProductionRole() — garde des routes/pages production
+    rbac.test.ts
   components/
     marketing/site-header.tsx, site-footer.tsx
     auth/logout-button.tsx
     vehicles/
       vehicle-card.tsx, vehicle-form.tsx, vehicle-actions.tsx, vehicle-photo-uploader.tsx
+    service-requests/
+      service-request-wizard.tsx    Assistant 8 étapes (état local, un seul submit)
+      service-request-card.tsx
+      cancel-request-button.tsx
+    production/
+      service-request-actions.tsx   Accepter/Refuser/Demander autre créneau (client component)
 prisma/
-  schema.prisma                     Modèle de données complet (section 62) + extensions véhicule (Phase 2)
-  seed.ts                           Templates de notification + compte admin de test
+  schema.prisma                     Modèle de données complet (section 62) + extensions véhicule (P2) + demandes (P3)
+  seed.ts                           Templates de notification (20) + compte admin de test
+  migrations/                       20260825001111_initial_schema, 20260825162443_service_requests
 vitest.config.mts                   Configuration des tests unitaires (npm test)
-docker-compose.yml                  PostgreSQL local (port 5433)
+docker-compose.yml                  PostgreSQL local (port 5433) — non utilisé depuis P2.5, Neon en usage réel
 ```
 
 ## 3. Fichiers existants conservés

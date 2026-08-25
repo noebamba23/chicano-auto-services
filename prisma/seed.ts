@@ -8,9 +8,14 @@ const db = new PrismaClient();
 // notification (à construire en phase 4+).
 const TEMPLATES: { event: NotificationEvent; body: string }[] = [
   { event: "ACCOUNT_VERIFIED", body: "CHICANO AUTO SERVICES\nVotre compte est vérifié. Bienvenue {{firstName}} !" },
-  { event: "REQUEST_RECEIVED", body: "CHICANO AUTO SERVICES\nVotre demande a bien été reçue. Nous revenons vers vous rapidement." },
+  { event: "REQUEST_RECEIVED", body: "CHICANO AUTO SERVICES\nVotre demande {{reference}} a bien été reçue. Notre équipe va l'étudier et vous confirmer la prise en charge." },
+  { event: "REQUEST_ACCEPTED", body: "CHICANO AUTO SERVICES\nVotre demande {{reference}} est acceptée.\nVéhicule : {{vehicle}}\nDate proposée : {{date}} — {{slot}}." },
+  { event: "REQUEST_REJECTED", body: "CHICANO AUTO SERVICES\nVotre demande {{reference}} n'a pas pu être retenue.{{reason}}" },
+  { event: "RESCHEDULE_REQUESTED", body: "CHICANO AUTO SERVICES\nCHICANO vous propose un autre créneau pour votre demande {{reference}} : {{date}} — {{slot}}." },
   { event: "APPOINTMENT_ACCEPTED", body: "CHICANO AUTO SERVICES\nVotre rendez-vous est confirmé.\nVéhicule : {{vehicle}}\nDate : {{date}}\nHeure : {{time}}\nType : {{interventionType}}." },
+  { event: "APPOINTMENT_CONFIRMED", body: "CHICANO AUTO SERVICES\nVotre rendez-vous pour {{reference}} est confirmé : {{date}} — {{slot}}." },
   { event: "APPOINTMENT_RESCHEDULED", body: "CHICANO AUTO SERVICES\nVotre rendez-vous a été replanifié.\nNouvelle date : {{date}} à {{time}}." },
+  { event: "APPOINTMENT_CANCELLED", body: "CHICANO AUTO SERVICES\nVotre rendez-vous pour {{reference}} a été annulé." },
   { event: "TECHNICIAN_ASSIGNED", body: "CHICANO AUTO SERVICES\nUn technicien a été affecté à votre intervention." },
   { event: "TECHNICIAN_EN_ROUTE", body: "CHICANO AUTO SERVICES\nVotre technicien CHICANO est en route." },
   { event: "TECHNICIAN_ARRIVED", body: "CHICANO AUTO SERVICES\nVotre technicien CHICANO est arrivé sur place." },

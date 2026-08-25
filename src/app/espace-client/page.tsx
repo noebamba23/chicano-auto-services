@@ -5,9 +5,9 @@ import { getCustomerIdForUser, listVehiclesForCustomer } from "@/lib/vehicles/se
 import { VehicleCard } from "@/components/vehicles/vehicle-card";
 
 const ACTIONS = [
-  { emoji: "🔧", label: "Demander un service", href: "#", available: false },
+  { emoji: "🔧", label: "Demander un service", href: "/espace-client/demande-service", available: true },
   { emoji: "🚨", label: "Urgence", href: "/urgence", available: true },
-  { emoji: "📅", label: "Mes rendez-vous", href: "#", available: false },
+  { emoji: "📋", label: "Mes demandes", href: "/espace-client/demandes", available: true },
   { emoji: "🚗", label: "Mes véhicules", href: "/espace-client/vehicules", available: true },
   { emoji: "📄", label: "Mes rapports", href: "#", available: false },
   { emoji: "💰", label: "Mes devis", href: "#", available: false },

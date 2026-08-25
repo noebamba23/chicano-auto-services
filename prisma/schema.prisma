@@ -361,12 +361,13 @@ enum InterventionType {
 
 enum ServiceRequestStatus {
   DRAFT
-  PENDING
+  SUBMITTED
   UNDER_REVIEW
   ACCEPTED
   REJECTED
-  CONVERTED_TO_APPOINTMENT
+  RESCHEDULE_REQUESTED
   CANCELLED
+  COMPLETED
 }
 
 enum UrgencyReason {
@@ -387,6 +388,11 @@ enum LocationSource {
 
 model ServiceRequest {
   id                String   @id @default(cuid())
+  // Compteur natif Postgres, même principe que Vehicle.sequenceNumber
+  // (section 3 Phase 2) — dérive un identifiant métier lisible et unique
+  // sans verrou applicatif, atomique même sous création concurrente.
+  sequenceNumber    Int      @unique @default(autoincrement())
+  referenceNumber   String   @unique // CHC-SR-000001
   customerId        String
   vehicleId         String
   category          ServiceCategory
@@ -394,7 +400,12 @@ model ServiceRequest {
   interventionType  InterventionType
   isUrgent          Boolean  @default(false)
   urgencyReason     UrgencyReason?
-  status            ServiceRequestStatus @default(PENDING)
+  // Description courte obligatoire côté application si isUrgent = true
+  // (section "RÈGLE MÉTIER IMPORTANTE" de la Phase 3).
+  urgencyDescription String?
+  preferredDate     DateTime?
+  preferredSlot     String? // ex. "08:00-10:00" — voir lib/service-requests/options.ts
+  status            ServiceRequestStatus @default(SUBMITTED)
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
@@ -405,7 +416,9 @@ model ServiceRequest {
   appointment       Appointment?
 
   @@index([customerId])
+  @@index([vehicleId])
   @@index([status])
+  @@index([createdAt])
 }
 
 model ServiceRequestAttachment {
@@ -466,6 +479,7 @@ model Appointment {
   scheduledSlot     String?
   interventionType  InterventionType
   status            AppointmentStatus @default(PENDING)
+  notes             String?
   acceptedAt        DateTime?
   rejectedAt        DateTime?
   createdAt         DateTime @default(now())
@@ -919,8 +933,13 @@ enum NotificationChannel {
 enum NotificationEvent {
   ACCOUNT_VERIFIED
   REQUEST_RECEIVED
+  REQUEST_ACCEPTED
+  REQUEST_REJECTED
+  RESCHEDULE_REQUESTED
   APPOINTMENT_ACCEPTED
+  APPOINTMENT_CONFIRMED
   APPOINTMENT_RESCHEDULED
+  APPOINTMENT_CANCELLED
   TECHNICIAN_ASSIGNED
   TECHNICIAN_EN_ROUTE
   TECHNICIAN_ARRIVED
