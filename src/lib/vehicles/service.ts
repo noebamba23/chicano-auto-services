@@ -29,6 +29,13 @@ export class VehicleConflictError extends Error {
   }
 }
 
+// Chaque transaction ci-dessous fait 3-4 aller-retours réseau séquentiels
+// (count/create/update/auditLog). Le timeout interactif par défaut de Prisma
+// (5s) peut être dépassé par la latence réelle vers une base distante — bien
+// en deçà de ce qu'exigerait un vrai problème de verrou. Ajuster ces valeurs
+// n'change aucune logique métier.
+const TRANSACTION_OPTIONS = { timeout: 15_000, maxWait: 10_000 };
+
 const VEHICLE_INCLUDE = {
   photos: { orderBy: { createdAt: "asc" as const } },
 } satisfies Prisma.VehicleInclude;
@@ -133,7 +140,7 @@ export async function createVehicle(customerId: string, input: VehicleInput) {
     });
 
     return vehicle;
-  });
+  }, TRANSACTION_OPTIONS);
 }
 
 export async function updateVehicle(customerId: string, vehicleId: string, input: Partial<VehicleInput>) {
@@ -174,7 +181,7 @@ export async function setPrimaryVehicle(customerId: string, vehicleId: string) {
       data: { action: "VEHICLE_SET_PRIMARY", entity: "Vehicle", entityId: vehicle.id },
     });
     return vehicle;
-  });
+  }, TRANSACTION_OPTIONS);
 }
 
 export async function archiveVehicle(customerId: string, vehicleId: string) {
@@ -208,7 +215,7 @@ export async function archiveVehicle(customerId: string, vehicleId: string) {
     });
 
     return archived;
-  });
+  }, TRANSACTION_OPTIONS);
 }
 
 export async function addVehiclePhoto(
