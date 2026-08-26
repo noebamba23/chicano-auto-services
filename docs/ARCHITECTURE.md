@@ -59,6 +59,11 @@ src/
       kanban/page.tsx              Colonnes = statuts pilotables, clic → fiche (P4)
       calendrier/page.tsx          Vue semaine, créneau × jour (P4)
       techniciens/page.tsx         Liste lecture seule (P4)
+    technicien/
+      layout.tsx                   Garde RBAC (TECHNICIAN), dark mode (P5)
+      page.tsx                     Mes interventions (liste des affectations)
+      interventions/[assignmentId]/page.tsx  Détail + actions Je pars/Je suis arrivé/Démarrer diagnostic
+      diagnostics/[diagnosticId]/page.tsx    Checklist + codes défaut + clôture
     api/
       auth/
         register/route.ts
@@ -87,11 +92,24 @@ src/
       production/service-requests/
         route.ts                   GET (toutes, filtres, RBAC)
         [id]/route.ts              GET (détail, RBAC)
-  proxy.ts                          Garde d'accès (Node.js runtime, Next 16) — inclut le contrôle de rôle sur /production
+      production/technicians/route.ts  GET (liste) (P4)
+      production/service-requests/[id]/assign-technician/route.ts  POST (P4)
+      service-requests/[id]/review/route.ts    POST — mise en examen (P4)
+      service-requests/[id]/complete/route.ts  POST — clôture production (P4)
+      technicien/
+        interventions/[assignmentId]/depart/route.ts           POST — ASSIGNED → EN_ROUTE (P5)
+        interventions/[assignmentId]/arrive/route.ts            POST — EN_ROUTE → ARRIVED (P5)
+        interventions/[assignmentId]/start-diagnostic/route.ts  POST — crée le Diagnostic (P5)
+        diagnostics/[diagnosticId]/checks/route.ts               POST — upsert DiagnosticCheck (P5)
+        diagnostics/[diagnosticId]/fault-codes/route.ts          POST — ajoute un code défaut (P5)
+        diagnostics/[diagnosticId]/fault-codes/[faultCodeId]/route.ts  DELETE (P5)
+        diagnostics/[diagnosticId]/complete/route.ts             POST — clôt le diagnostic (P5)
+  proxy.ts                          Garde d'accès (Node.js runtime, Next 16) — rôle sur /production, /technicien, /espace-client (P5)
   lib/
     db.ts                           Client Prisma singleton
     http.ts                         Helpers de réponse JSON (dont mapping d'erreurs métier → HTTP)
     phone.ts                        Normalisation E.164 (libphonenumber-js)
+    auth/home-for-role.ts           Page d'accueil par rôle — source unique (login + proxy) (P5)
     validation/
       auth.ts                      Schémas zod auth
       vehicles.ts                  Schémas zod véhicule (création/mise à jour)
@@ -136,6 +154,14 @@ src/
       providers/openstreetmap-provider.ts  MVP sans dépendance ni clé API
     rbac.ts                          requireProductionRole() — garde des routes/pages production
     rbac.test.ts
+    technicians/
+      service.ts                    Affectation (P4) + départ/arrivée/ownership (P5)
+      service.test.ts
+      guard.ts                       requireTechnician() (P5)
+    diagnostics/
+      service.ts                    Diagnostic + checklist + codes défaut (P5)
+      service.test.ts
+      options.ts                    Libellés catégories/résultats
   components/
     marketing/site-header.tsx, site-footer.tsx
     auth/logout-button.tsx
@@ -147,10 +173,16 @@ src/
       cancel-request-button.tsx
     production/
       service-request-actions.tsx   Accepter/Refuser/Demander autre créneau (client component)
+      assign-technician-form.tsx    Formulaire d'affectation (P4)
+    technicien/
+      intervention-actions.tsx      Je pars/Je suis arrivé/Démarrer le diagnostic (P5)
+      diagnostic-checklist.tsx      10 catégories, upsert par ligne (P5)
+      fault-codes-form.tsx          Ajout/retrait de codes défaut (P5)
+      complete-diagnostic-button.tsx (P5)
 prisma/
   schema.prisma                     Modèle de données complet (section 62) + extensions véhicule (P2) + demandes (P3)
-  seed.ts                           Templates de notification (20) + compte admin de test
-  migrations/                       20260825001111_initial_schema, 20260825162443_service_requests
+  seed.ts                           Templates de notification (20) + compte admin de test + techniciens démo (P4)
+  migrations/                       20260825001111_initial_schema, 20260825162443_service_requests (aucune nouvelle en P4/P5)
 vitest.config.mts                   Configuration des tests unitaires (npm test)
 docker-compose.yml                  PostgreSQL local (port 5433) — non utilisé depuis P2.5, Neon en usage réel
 ```

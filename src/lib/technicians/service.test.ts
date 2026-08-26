@@ -14,7 +14,15 @@ const { db } = await import("@/lib/db");
 const fakeDb = db as unknown as ReturnType<typeof createFakeDb>;
 
 const { createServiceRequest, acceptServiceRequest } = await import("@/lib/service-requests/service");
-const { assignTechnician, listTechnicians, TechnicianConflictError } = await import("./service");
+const {
+  assignTechnician,
+  listTechnicians,
+  departForAssignment,
+  arriveForAssignment,
+  getAssignmentForTechnician,
+  TechnicianConflictError,
+  AssignmentNotFoundError,
+} = await import("./service");
 
 const CUSTOMER_A = "customer-a";
 const VEHICLE_A = "vehicle-a";
@@ -32,6 +40,7 @@ const VALID_INPUT = {
 beforeEach(() => {
   fakeDb._reset();
   fakeDb._seedVehicle({ id: VEHICLE_A, customerId: CUSTOMER_A });
+  fakeDb._seedCustomer({ id: CUSTOMER_A, userId: "user-a" });
   fakeDb._seedTechnician({ id: TECH_A, user: { firstName: "DEMO", lastName: "TECHNICIEN A" } });
   fakeDb._seedTechnician({ id: TECH_B, user: { firstName: "DEMO", lastName: "TECHNICIEN B" } });
 });
@@ -95,5 +104,49 @@ describe("assignTechnician", () => {
     const reassigned = fakeDb._technicianAssignments.filter((a) => a.technicianId === TECH_A);
     expect(reassigned).toHaveLength(1);
     expect(reassigned[0].status).toBe("REASSIGNED");
+  });
+});
+
+describe("Espace technicien (Phase 5) — départ et arrivée", () => {
+  it("ASSIGNED → EN_ROUTE via departForAssignment", async () => {
+    const result = await createAcceptedRequest("2026-09-02", "08:00-10:00");
+    const assignment = await assignTechnician(result.id, TECH_A);
+
+    const updated = await departForAssignment(TECH_A, assignment.id);
+    expect(updated.status).toBe("EN_ROUTE");
+    expect(updated.departedAt).not.toBeNull();
+  });
+
+  it("refuse de partir deux fois (ASSIGNED requis)", async () => {
+    const result = await createAcceptedRequest("2026-09-02", "08:00-10:00");
+    const assignment = await assignTechnician(result.id, TECH_A);
+    await departForAssignment(TECH_A, assignment.id);
+
+    await expect(departForAssignment(TECH_A, assignment.id)).rejects.toThrow(TechnicianConflictError);
+  });
+
+  it("refuse d'arriver avant d'être parti (EN_ROUTE requis)", async () => {
+    const result = await createAcceptedRequest("2026-09-02", "08:00-10:00");
+    const assignment = await assignTechnician(result.id, TECH_A);
+
+    await expect(arriveForAssignment(TECH_A, assignment.id)).rejects.toThrow(TechnicianConflictError);
+  });
+
+  it("EN_ROUTE → ARRIVED via arriveForAssignment après le départ", async () => {
+    const result = await createAcceptedRequest("2026-09-02", "08:00-10:00");
+    const assignment = await assignTechnician(result.id, TECH_A);
+    await departForAssignment(TECH_A, assignment.id);
+
+    const updated = await arriveForAssignment(TECH_A, assignment.id);
+    expect(updated.status).toBe("ARRIVED");
+    expect(updated.arrivedAt).not.toBeNull();
+  });
+
+  it("un technicien ne peut ni voir ni agir sur l'affectation d'un autre (404, jamais 403)", async () => {
+    const result = await createAcceptedRequest("2026-09-02", "08:00-10:00");
+    const assignment = await assignTechnician(result.id, TECH_A);
+
+    await expect(getAssignmentForTechnician(TECH_B, assignment.id)).rejects.toThrow(AssignmentNotFoundError);
+    await expect(departForAssignment(TECH_B, assignment.id)).rejects.toThrow(AssignmentNotFoundError);
   });
 });

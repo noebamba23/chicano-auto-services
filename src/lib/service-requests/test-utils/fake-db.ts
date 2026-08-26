@@ -52,6 +52,9 @@ export function createFakeDb() {
   let auditLogs: Row[] = [];
   let technicians: Row[] = [];
   let technicianAssignments: Row[] = [];
+  let diagnostics: Row[] = [];
+  let diagnosticChecks: Row[] = [];
+  let diagnosticFaultCodes: Row[] = [];
   let nextSrSequence = 1;
 
   function withRequestExtras(row: Row) {
@@ -61,6 +64,49 @@ export function createFakeDb() {
       attachments: [],
       appointment: appointments.find((a) => a.serviceRequestId === row.id) ?? null,
       vehicle: vehicles.find((v) => v.id === row.vehicleId) ?? null,
+    };
+  }
+
+  // Vue enrichie d'une affectation avec son rendez-vous (Phase 5 — espace
+  // technicien) : le technicien/le diagnostic n'ont besoin que de champs
+  // précis de cette relation imbriquée (customer.userId pour les
+  // notifications, vehicleId/serviceRequestId pour le fil métier) — pas
+  // d'une réplique fidèle complète de la forme Prisma (même limite déjà
+  // documentée pour withRequestExtras : ce fake teste la logique
+  // applicative, pas la forme d'affichage, vérifiée en conditions réelles
+  // via Neon + navigateur).
+  function withAssignmentAppointment(row: Row) {
+    const apt = appointments.find((a) => a.id === row.appointmentId);
+    if (!apt) return { ...row, appointment: null };
+    const sr = serviceRequests.find((s) => s.id === apt.serviceRequestId);
+    const customer = customers.find((c) => c.id === apt.customerId);
+    return {
+      ...row,
+      appointment: {
+        ...apt,
+        serviceRequest: sr ? { referenceNumber: sr.referenceNumber, category: sr.category, isUrgent: sr.isUrgent } : null,
+        vehicle: vehicles.find((v) => v.id === apt.vehicleId) ?? null,
+        customer: customer ? { userId: customer.userId } : null,
+        location: appointmentLocations.find((l) => l.appointmentId === apt.id) ?? null,
+        diagnostics: diagnostics.filter((d) => d.appointmentId === apt.id),
+      },
+    };
+  }
+
+  function withDiagnosticExtras(row: Row) {
+    return {
+      ...row,
+      checks: diagnosticChecks.filter((c) => c.diagnosticId === row.id),
+      faultCodes: diagnosticFaultCodes
+        .filter((f) => f.diagnosticId === row.id)
+        .sort((a, b) => +new Date(a.createdAt as string) - +new Date(b.createdAt as string)),
+      vehicle: vehicles.find((v) => v.id === row.vehicleId) ?? null,
+      appointment: (() => {
+        const apt = appointments.find((a) => a.id === row.appointmentId);
+        if (!apt) return null;
+        const sr = serviceRequests.find((s) => s.id === apt.serviceRequestId);
+        return { id: apt.id, serviceRequest: sr ? { referenceNumber: sr.referenceNumber } : null };
+      })(),
     };
   }
 
@@ -185,15 +231,30 @@ export function createFakeDb() {
     },
   };
 
-  // technicianAssignment.findFirst nécessite de filtrer sur des champs de
-  // l'Appointment lié (relation imbriquée) : la fonction matches() générique
-  // ne fait que de l'égalité de champs plats, donc implémentation dédiée ici
-  // plutôt que forcée dans le matcher générique (section "TECHNICIENS" de la
-  // Phase 4 : test de non-double-réservation).
+  // technicianAssignment.findFirst sert deux formes de requête distinctes :
+  // la vérification de double-réservation (Phase 4 — where.appointment
+  // filtre sur un rendez-vous imbriqué autre que le sien, que matches()
+  // générique ne peut pas exprimer) et le lookup d'ownership technicien
+  // (Phase 5 — where.id/.technicianId, champs plats). Deux branches plutôt
+  // qu'un matcher unique pour ne pas complexifier matches() avec un cas très
+  // spécifique à une seule requête métier.
   const technicianAssignmentModel = {
     async create({ data }: { data: Record<string, unknown> }) {
-      const row: Row = { id: randomUUID(), createdAt: new Date(), status: "ASSIGNED", ...data } as Row;
+      const row: Row = {
+        id: randomUUID(),
+        createdAt: new Date(),
+        status: "ASSIGNED",
+        departedAt: null,
+        arrivedAt: null,
+        ...data,
+      } as Row;
       technicianAssignments.push(row);
+      return row;
+    },
+    async update({ where, data }: { where: { id: string }; data: Record<string, unknown> }) {
+      const row = technicianAssignments.find((r) => r.id === where.id);
+      if (!row) throw new Error("Record to update not found.");
+      Object.assign(row, data);
       return row;
     },
     async updateMany({ where, data }: { where: Record<string, unknown>; data: Record<string, unknown> }) {
@@ -204,24 +265,91 @@ export function createFakeDb() {
     async findFirst({
       where,
     }: {
-      where: {
-        technicianId: string;
-        status?: { not: string };
-        appointment: { scheduledDate: unknown; scheduledSlot: unknown; id: { not: string } };
+      where: Record<string, unknown> & {
+        appointment?: { scheduledDate: unknown; scheduledSlot: unknown; id: { not: string } };
       };
     }) {
-      const found = technicianAssignments.find((ta) => {
-        if (ta.technicianId !== where.technicianId) return false;
-        if (where.status?.not && ta.status === where.status.not) return false;
-        const apt = appointments.find((a) => a.id === ta.appointmentId);
-        if (!apt) return false;
-        if (apt.id === where.appointment.id.not) return false;
-        if (+new Date(apt.scheduledDate as string) !== +new Date(where.appointment.scheduledDate as string))
-          return false;
-        if (apt.scheduledSlot !== where.appointment.scheduledSlot) return false;
-        return true;
-      });
-      return found ?? null;
+      if (where.appointment) {
+        const appointmentWhere = where.appointment;
+        const found = technicianAssignments.find((ta) => {
+          if (where.technicianId !== undefined && ta.technicianId !== where.technicianId) return false;
+          const statusCond = where.status as { not?: string } | undefined;
+          if (statusCond?.not && ta.status === statusCond.not) return false;
+          const apt = appointments.find((a) => a.id === ta.appointmentId);
+          if (!apt) return false;
+          if (apt.id === appointmentWhere.id.not) return false;
+          if (+new Date(apt.scheduledDate as string) !== +new Date(appointmentWhere.scheduledDate as string))
+            return false;
+          if (apt.scheduledSlot !== appointmentWhere.scheduledSlot) return false;
+          return true;
+        });
+        return found ?? null;
+      }
+
+      const found = technicianAssignments.find((ta) => matches(ta, where));
+      return found ? withAssignmentAppointment(found) : null;
+    },
+    async findMany({ where, orderBy }: { where: Record<string, unknown>; orderBy?: unknown }) {
+      const rows = applyOrder(technicianAssignments.filter((r) => matches(r, where)), orderBy);
+      return rows.map(withAssignmentAppointment);
+    },
+  };
+
+  const diagnosticModel = {
+    async create({ data }: { data: Record<string, unknown> }) {
+      const row: Row = { id: randomUUID(), startedAt: new Date(), completedAt: null, ...data } as Row;
+      diagnostics.push(row);
+      return withDiagnosticExtras(row);
+    },
+    async update({ where, data }: { where: { id: string }; data: Record<string, unknown> }) {
+      const row = diagnostics.find((r) => r.id === where.id);
+      if (!row) throw new Error("Record to update not found.");
+      Object.assign(row, data);
+      return withDiagnosticExtras(row);
+    },
+    async findUnique({ where }: { where: Record<string, unknown> }) {
+      const row = diagnostics.find((r) => matches(r, where));
+      return row ? withDiagnosticExtras(row) : null;
+    },
+    async findFirst({ where, orderBy }: { where: Record<string, unknown>; orderBy?: unknown }) {
+      const rows = applyOrder(diagnostics.filter((r) => matches(r, where)), orderBy);
+      return rows[0] ? withDiagnosticExtras(rows[0]) : null;
+    },
+  };
+
+  const diagnosticCheckModel = {
+    async upsert({
+      where,
+      create,
+      update,
+    }: {
+      where: { diagnosticId_category: { diagnosticId: string; category: string } };
+      create: Record<string, unknown>;
+      update: Record<string, unknown>;
+    }) {
+      const key = where.diagnosticId_category;
+      const existing = diagnosticChecks.find((c) => c.diagnosticId === key.diagnosticId && c.category === key.category);
+      if (existing) {
+        Object.assign(existing, update);
+        return existing;
+      }
+      const row: Row = { id: randomUUID(), ...create } as Row;
+      diagnosticChecks.push(row);
+      return row;
+    },
+  };
+
+  const diagnosticFaultCodeModel = {
+    async create({ data }: { data: Record<string, unknown> }) {
+      const row: Row = { id: randomUUID(), createdAt: new Date(), ...data } as Row;
+      diagnosticFaultCodes.push(row);
+      return row;
+    },
+    async delete({ where }: { where: { id: string } }) {
+      const idx = diagnosticFaultCodes.findIndex((r) => r.id === where.id);
+      if (idx === -1) throw new Error("Record to delete not found.");
+      const [removed] = diagnosticFaultCodes.splice(idx, 1);
+      return removed;
     },
   };
 
@@ -235,6 +363,9 @@ export function createFakeDb() {
     auditLog: auditLogModel,
     technician: technicianModel,
     technicianAssignment: technicianAssignmentModel,
+    diagnostic: diagnosticModel,
+    diagnosticCheck: diagnosticCheckModel,
+    diagnosticFaultCode: diagnosticFaultCodeModel,
     async $transaction(fnOrArray: unknown) {
       if (typeof fnOrArray === "function") {
         return (fnOrArray as (tx: typeof fakeDb) => unknown)(fakeDb);
@@ -254,6 +385,7 @@ export function createFakeDb() {
     _serviceRequests: serviceRequests,
     _appointments: appointments,
     _technicianAssignments: technicianAssignments,
+    _diagnostics: diagnostics,
     _reset() {
       vehicles = [];
       customers = [];
@@ -264,10 +396,14 @@ export function createFakeDb() {
       auditLogs = [];
       technicians = [];
       technicianAssignments = [];
+      diagnostics = [];
+      diagnosticChecks = [];
+      diagnosticFaultCodes = [];
       nextSrSequence = 1;
       fakeDb._serviceRequests = serviceRequests;
       fakeDb._appointments = appointments;
       fakeDb._technicianAssignments = technicianAssignments;
+      fakeDb._diagnostics = diagnostics;
     },
   };
 

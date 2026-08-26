@@ -11,7 +11,7 @@ Ne pas paralléliser les phases : chacune se construit sur la précédente.
 | P2.5 | Validation PostgreSQL réel (Neon) | ✅ Fait — migration initiale appliquée, auth + véhicules + ownership validés en conditions réelles |
 | P3 | Demandes + urgence + géolocalisation + rendez-vous | ✅ Fait — voir `SERVICE-REQUESTS.md` |
 | P4 | Production (suite) + Kanban + calendrier + affectation technicien basique | ✅ Fait — voir `SERVICE-REQUESTS.md` (section Phase 4) |
-| P5 | Application technicien complète + diagnostic | ⏳ À faire |
+| P5 | Application technicien complète + diagnostic | ✅ Fait — voir `TECHNICIAN-APP.md` |
 | P6 | Rapport + devis | ⏳ À faire |
 | P7 | Validation + réparation + clôture | ⏳ À faire |
 | P8 | Historique + rappels | ⏳ À faire |
@@ -154,11 +154,44 @@ Application technicien complète (JE PARS/ARRIVÉ, diagnostic terrain), vue
 calendrier mois, glisser-déposer Kanban, diagnostic/rapport/devis/réparation/
 facturation — voir `SERVICE-REQUESTS.md` pour le détail.
 
+## Détail Phase 5 (livrée)
+
+- Espace technicien (`/technicien`, rôle `TECHNICIAN`) : tableau de bord de
+  ses affectations, fiche intervention avec actions "Je pars"/"Je suis
+  arrivé" (`Appointment.status` devient réellement granulaire :
+  ASSIGNED → TECHNICIAN_EN_ROUTE → ARRIVED → IN_PROGRESS, valeurs posées au
+  schéma depuis la Phase 0 mais inutilisées jusqu'ici).
+- Module diagnostic terrain : démarrage (idempotent) une fois `ARRIVED`,
+  checklist 10 catégories (`DiagnosticCheck`, upsert par catégorie), codes
+  défaut libres (`DiagnosticFaultCode`), clôture (`Diagnostic.status`
+  `COMPLETED`, clôt aussi `TechnicianAssignment.status`). Ne clôt PAS
+  `Appointment`/`ServiceRequest` — action "Marquer terminée" (Phase 4)
+  toujours seule responsable de cette clôture administrative.
+- Redirection post-connexion et garde de rôle unifiées
+  (`src/lib/auth/home-for-role.ts`) : chaque rôle a désormais son propre
+  espace protégé (`/espace-client`, `/production`, `/technicien`) — avant
+  cette phase, `/espace-client` était accessible à n'importe quel rôle
+  authentifié (juste avec un tableau de bord vide pour un non-client), gap
+  corrigé ici plutôt que différé.
+- Visibilité production en lecture seule sur `/production/demandes/[id]`
+  (statut diagnostic, points de contrôle, codes défaut) — pas encore le
+  rapport client formaté (Phase 6).
+- 19 nouveaux tests unitaires (92 au total).
+- Documentation complète : `docs/TECHNICIAN-APP.md`.
+
+## Non couvert par la Phase 5 (volontairement)
+
+Rapport de diagnostic formaté et photos de preuve (`DiagnosticReport`/
+`ReportPhoto`), devis, réparation, validation client, facturation,
+géolocalisation temps réel du technicien, réaffectation en cours de
+diagnostic — voir `TECHNICIAN-APP.md` pour le détail de chaque limite
+assumée.
+
 ## PostgreSQL
 
 Résolu en Phase 2.5 : Docker Desktop restait bloqué sur cette machine (jamais
 dépassé son initialisation depuis l'installation) — contournement définitif via
 **Neon** (PostgreSQL cloud), `DATABASE_URL` pointant vers un projet Neon réel depuis
-lors. Toutes les migrations (P2.5, P3 — aucune nouvelle migration en P4, le schéma
-existant suffisait) ont été appliquées et validées contre cette base réelle, pas
-contre un mock.
+lors. Toutes les migrations (P2.5, P3 — aucune nouvelle migration en P4/P5, le
+schéma existant suffisait) ont été appliquées et validées contre cette base
+réelle, pas contre un mock.

@@ -17,8 +17,9 @@ export default async function ProductionTechniciansPage() {
     <div>
       <h1 className="text-2xl font-bold">Techniciens</h1>
       <p className="mt-1 text-sm text-white/60">
-        {technicians.length} technicien(s) — l&apos;application technicien complète (arrivée sur site,
-        diagnostic terrain) arrive dans une phase ultérieure.
+        {technicians.length} technicien(s) — suivi de disponibilité en lecture seule ; l&apos;affectation,
+        le départ/arrivée sur site et le diagnostic se pilotent depuis la fiche demande et l&apos;espace
+        technicien.
       </p>
 
       <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">

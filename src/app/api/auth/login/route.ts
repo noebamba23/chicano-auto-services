@@ -5,6 +5,7 @@ import { loginSchema } from "@/lib/validation/auth";
 import { normalizePhoneNumber, InvalidPhoneNumberError } from "@/lib/phone";
 import { verifyPassword } from "@/lib/auth/password";
 import { createSession } from "@/lib/auth/session";
+import { homeForRole } from "@/lib/auth/home-for-role";
 import { jsonError, jsonFromZodError } from "@/lib/http";
 
 export async function POST(req: NextRequest) {
@@ -31,7 +32,7 @@ export async function POST(req: NextRequest) {
       ipAddress: req.headers.get("x-forwarded-for") ?? undefined,
     });
 
-    const redirectTo = user.status === "PENDING_VERIFICATION" ? "/verification-whatsapp" : "/espace-client";
+    const redirectTo = user.status === "PENDING_VERIFICATION" ? "/verification-whatsapp" : homeForRole(user.role);
     return NextResponse.json({ redirectTo });
   } catch (err) {
     if (err instanceof ZodError) return jsonFromZodError(err);

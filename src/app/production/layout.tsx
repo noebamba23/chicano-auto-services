@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { getSession } from "@/lib/auth/session";
+import { homeForRole } from "@/lib/auth/home-for-role";
 import { LogoutButton } from "@/components/auth/logout-button";
 
 const PRODUCTION_ROLES = ["PRODUCTION_STAFF", "ADMIN", "SUPER_ADMIN"];
@@ -18,7 +19,7 @@ export default async function ProductionLayout({ children }: { children: React.R
   const session = await getSession();
   if (!session) redirect("/connexion?next=/production/demandes");
   if (session.status === "SUSPENDED" || session.status === "BLOCKED") redirect("/connexion");
-  if (!PRODUCTION_ROLES.includes(session.role)) redirect("/espace-client");
+  if (!PRODUCTION_ROLES.includes(session.role)) redirect(homeForRole(session.role));
 
   return (
     <div className="min-h-screen bg-chicano-black text-chicano-white">

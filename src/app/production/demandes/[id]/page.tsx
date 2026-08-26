@@ -11,6 +11,8 @@ import {
 import { ServiceRequestActions } from "@/components/production/service-request-actions";
 import { AssignTechnicianForm } from "@/components/production/assign-technician-form";
 import { listTechnicians, getActiveAssignmentForAppointment } from "@/lib/technicians/service";
+import { getLatestDiagnosticForAppointment } from "@/lib/diagnostics/service";
+import { diagnosticStatusLabel, checkCategoryLabel, checkResultLabel } from "@/lib/diagnostics/options";
 
 export default async function ProductionServiceRequestPage({
   params,
@@ -103,10 +105,65 @@ export default async function ProductionServiceRequestPage({
         <TechnicianSection appointmentId={request.appointment.id} requestId={request.id} />
       )}
 
+      {request.appointment && <DiagnosticSection appointmentId={request.appointment.id} />}
+
       <div className="mt-6">
         <ServiceRequestActions requestId={request.id} status={request.status} />
       </div>
     </div>
+  );
+}
+
+// Visibilité production en lecture seule (Phase 5) — le rapport client
+// formaté (photos, conclusion, sévérité) arrive en Phase 6 ; ici, la
+// production voit simplement où en est le constat terrain.
+async function DiagnosticSection({ appointmentId }: { appointmentId: string }) {
+  const diagnostic = await getLatestDiagnosticForAppointment(appointmentId);
+  if (!diagnostic) return null;
+
+  const checkedCategories = diagnostic.checks.filter((c) => c.result !== "NOT_CHECKED");
+
+  return (
+    <section className="mt-6 rounded-lg border border-white/10 bg-white/5 p-6">
+      <div className="flex items-center justify-between">
+        <h2 className="text-xs font-semibold uppercase tracking-wide text-white/50">Diagnostic</h2>
+        <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-semibold">
+          {diagnosticStatusLabel(diagnostic.status)}
+        </span>
+      </div>
+
+      {(diagnostic.mileageAtVisit || diagnostic.symptoms) && (
+        <div className="mt-3 text-sm">
+          {diagnostic.mileageAtVisit && (
+            <p>
+              <span className="text-white/50">Kilométrage : </span>
+              {diagnostic.mileageAtVisit.toLocaleString("fr-FR")} km
+            </p>
+          )}
+          {diagnostic.symptoms && (
+            <p className="mt-1">
+              <span className="text-white/50">Symptômes : </span>
+              {diagnostic.symptoms}
+            </p>
+          )}
+        </div>
+      )}
+
+      <p className="mt-3 text-sm text-white/70">
+        {checkedCategories.length}/10 points de contrôle vérifiés
+        {diagnostic.faultCodes.length > 0 && ` · ${diagnostic.faultCodes.length} code(s) défaut`}
+      </p>
+
+      {checkedCategories.length > 0 && (
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {checkedCategories.map((c) => (
+            <span key={c.category} className="rounded-full bg-white/10 px-2 py-0.5 text-xs text-white/70">
+              {checkCategoryLabel(c.category)} : {checkResultLabel(c.result)}
+            </span>
+          ))}
+        </div>
+      )}
+    </section>
   );
 }
 
