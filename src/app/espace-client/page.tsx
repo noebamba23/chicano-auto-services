@@ -9,8 +9,8 @@ const ACTIONS = [
   { emoji: "🚨", label: "Urgence", href: "/urgence", available: true },
   { emoji: "📋", label: "Mes demandes", href: "/espace-client/demandes", available: true },
   { emoji: "🚗", label: "Mes véhicules", href: "/espace-client/vehicules", available: true },
-  { emoji: "📄", label: "Mes rapports", href: "#", available: false },
-  { emoji: "💰", label: "Mes devis", href: "#", available: false },
+  { emoji: "📄", label: "Mes rapports", href: "/espace-client/rapports", available: true },
+  { emoji: "💰", label: "Mes devis", href: "/espace-client/devis", available: true },
 ];
 
 export default async function ClientDashboardPage() {

@@ -51,6 +51,12 @@ src/
       demandes/
         page.tsx                  Mes demandes (liste)
         [id]/page.tsx              Détail + annulation
+      rapports/
+        page.tsx                  Mes rapports (liste, publiés uniquement) (P6)
+        [id]/page.tsx              Détail (conclusion, sévérité, photos, points de contrôle) (P6)
+      devis/
+        page.tsx                  Mes devis (liste, hors DRAFT) (P6)
+        [id]/page.tsx              Détail + Accepter/Refuser/Demander modification (P6)
     production/
       layout.tsx                   Garde RBAC (PRODUCTION_STAFF/ADMIN/SUPER_ADMIN), dark mode, nav (P4)
       demandes/
@@ -96,6 +102,17 @@ src/
       production/service-requests/[id]/assign-technician/route.ts  POST (P4)
       service-requests/[id]/review/route.ts    POST — mise en examen (P4)
       service-requests/[id]/complete/route.ts  POST — clôture production (P4)
+      production/diagnostics/[diagnosticId]/report/route.ts   POST — créer/récupérer le brouillon (P6)
+      production/reports/[reportId]/route.ts                  PATCH — conclusion/sévérité (P6)
+      production/reports/[reportId]/photos/route.ts           POST (multipart) (P6)
+      production/reports/[reportId]/photos/[photoId]/route.ts DELETE (P6)
+      production/reports/[reportId]/publish/route.ts          POST — figeage + notification (P6)
+      production/diagnostics/[diagnosticId]/quote/route.ts    POST — créer un devis v1 (P6)
+      production/quotes/[quoteId]/send/route.ts                POST — DRAFT → SENT (P6)
+      production/quotes/[quoteId]/versions/route.ts            POST — nouvelle version (P6)
+      quotes/[quoteId]/accept/route.ts                          POST (client) (P6)
+      quotes/[quoteId]/reject/route.ts                          POST (client) (P6)
+      quotes/[quoteId]/request-modification/route.ts           POST (client) (P6)
       technicien/
         interventions/[assignmentId]/depart/route.ts           POST — ASSIGNED → EN_ROUTE (P5)
         interventions/[assignmentId]/arrive/route.ts            POST — EN_ROUTE → ARRIVED (P5)
@@ -162,6 +179,16 @@ src/
       service.ts                    Diagnostic + checklist + codes défaut (P5)
       service.test.ts
       options.ts                    Libellés catégories/résultats
+    reports/
+      service.ts                    DiagnosticReport + ReportPhoto (brouillon → publication figée) (P6)
+      service.test.ts
+      options.ts                    Libellés sévérité
+      reference.ts                  Génération CHC-DR-000001 (P6)
+    quotes/
+      service.ts                    Quote + QuoteVersion + QuoteItem (cycle versionné) (P6)
+      service.test.ts
+      options.ts                    Libellés statut + formatXOF (F CFA)
+      reference.ts                  Génération CHC-QT-000001 (P6)
   components/
     marketing/site-header.tsx, site-footer.tsx
     auth/logout-button.tsx
@@ -174,15 +201,19 @@ src/
     production/
       service-request-actions.tsx   Accepter/Refuser/Demander autre créneau (client component)
       assign-technician-form.tsx    Formulaire d'affectation (P4)
+      report-editor.tsx              Créer/éditer/publier le rapport (P6)
+      quote-editor.tsx                Créer un devis, l'envoyer, émettre une v2 (P6)
     technicien/
       intervention-actions.tsx      Je pars/Je suis arrivé/Démarrer le diagnostic (P5)
       diagnostic-checklist.tsx      10 catégories, upsert par ligne (P5)
       fault-codes-form.tsx          Ajout/retrait de codes défaut (P5)
       complete-diagnostic-button.tsx (P5)
+    quotes/
+      quote-response-actions.tsx    Accepter/Refuser/Demander modification (client) (P6)
 prisma/
-  schema.prisma                     Modèle de données complet (section 62) + extensions véhicule (P2) + demandes (P3)
+  schema.prisma                     Modèle de données complet (section 62) + extensions véhicule (P2) + demandes (P3) + sequenceNumber rapport/devis (P6)
   seed.ts                           Templates de notification (20) + compte admin de test + techniciens démo (P4)
-  migrations/                       20260825001111_initial_schema, 20260825162443_service_requests (aucune nouvelle en P4/P5)
+  migrations/                       20260825001111_initial_schema, 20260825162443_service_requests, 20260826070000_diagnostic_report_quote_sequence (P6) — aucune nouvelle en P4/P5
 vitest.config.mts                   Configuration des tests unitaires (npm test)
 docker-compose.yml                  PostgreSQL local (port 5433) — non utilisé depuis P2.5, Neon en usage réel
 ```

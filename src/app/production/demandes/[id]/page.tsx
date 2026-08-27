@@ -13,6 +13,10 @@ import { AssignTechnicianForm } from "@/components/production/assign-technician-
 import { listTechnicians, getActiveAssignmentForAppointment } from "@/lib/technicians/service";
 import { getLatestDiagnosticForAppointment } from "@/lib/diagnostics/service";
 import { diagnosticStatusLabel, checkCategoryLabel, checkResultLabel } from "@/lib/diagnostics/options";
+import { getReportByDiagnostic } from "@/lib/reports/service";
+import { getActiveQuoteForDiagnostic } from "@/lib/quotes/service";
+import { ReportEditor } from "@/components/production/report-editor";
+import { QuoteEditor } from "@/components/production/quote-editor";
 import { formatPlateNumber } from "@/lib/vehicles/registration/plate";
 
 export default async function ProductionServiceRequestPage({
@@ -111,6 +115,8 @@ export default async function ProductionServiceRequestPage({
 
       {request.appointment && <DiagnosticSection appointmentId={request.appointment.id} />}
 
+      {request.appointment && <ReportAndQuoteSection appointmentId={request.appointment.id} />}
+
       <div className="mt-6">
         <ServiceRequestActions requestId={request.id} status={request.status} />
       </div>
@@ -168,6 +174,38 @@ async function DiagnosticSection({ appointmentId }: { appointmentId: string }) {
         </div>
       )}
     </section>
+  );
+}
+
+// Rapport (Phase 6) : ne devient créable que sur un diagnostic terminé —
+// voir getOrCreateDraftReport(). Devis (Phase 6) : même garde côté service
+// (createQuote), affiché indépendamment du rapport (un devis peut être créé
+// avant que le rapport soit publié).
+async function ReportAndQuoteSection({ appointmentId }: { appointmentId: string }) {
+  const diagnostic = await getLatestDiagnosticForAppointment(appointmentId);
+  if (!diagnostic || diagnostic.status !== "COMPLETED") return null;
+
+  const [report, quote] = await Promise.all([
+    getReportByDiagnostic(diagnostic.id),
+    getActiveQuoteForDiagnostic(diagnostic.id),
+  ]);
+
+  return (
+    <>
+      <section className="mt-6">
+        <h2 className="text-xs font-semibold uppercase tracking-wide text-white/50">Rapport de diagnostic</h2>
+        <div className="mt-3">
+          <ReportEditor diagnosticId={diagnostic.id} report={report} />
+        </div>
+      </section>
+
+      <section className="mt-6">
+        <h2 className="text-xs font-semibold uppercase tracking-wide text-white/50">Devis</h2>
+        <div className="mt-3">
+          <QuoteEditor diagnosticId={diagnostic.id} quote={quote} />
+        </div>
+      </section>
+    </>
   );
 }
 

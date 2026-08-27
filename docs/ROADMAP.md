@@ -12,7 +12,7 @@ Ne pas paralléliser les phases : chacune se construit sur la précédente.
 | P3 | Demandes + urgence + géolocalisation + rendez-vous | ✅ Fait — voir `SERVICE-REQUESTS.md` |
 | P4 | Production (suite) + Kanban + calendrier + affectation technicien basique | ✅ Fait — voir `SERVICE-REQUESTS.md` (section Phase 4) |
 | P5 | Application technicien complète + diagnostic | ✅ Fait — voir `TECHNICIAN-APP.md` |
-| P6 | Rapport + devis | ⏳ À faire |
+| P6 | Rapport + devis | ✅ Fait — voir `REPORTS-QUOTES.md` |
 | P7 | Validation + réparation + clôture | ⏳ À faire |
 | P8 | Historique + rappels | ⏳ À faire |
 | P9 | CRM + KPI | ⏳ À faire |
@@ -176,7 +176,7 @@ facturation — voir `SERVICE-REQUESTS.md` pour le détail.
 - Visibilité production en lecture seule sur `/production/demandes/[id]`
   (statut diagnostic, points de contrôle, codes défaut) — pas encore le
   rapport client formaté (Phase 6).
-- 19 nouveaux tests unitaires (92 au total).
+- 13 nouveaux tests unitaires (86 au total).
 - Documentation complète : `docs/TECHNICIAN-APP.md`.
 
 ## Non couvert par la Phase 5 (volontairement)
@@ -187,11 +187,41 @@ géolocalisation temps réel du technicien, réaffectation en cours de
 diagnostic — voir `TECHNICIAN-APP.md` pour le détail de chaque limite
 assumée.
 
+## Détail Phase 6 (livrée)
+
+- Rapport de diagnostic (`DiagnosticReport`) : brouillon éditable
+  (conclusion, sévérité, photos de preuve réelles via `StorageProvider`) tant
+  que non publié ; publication = figeage définitif, plus aucune modification
+  possible ensuite. Un brouillon n'est jamais visible côté client.
+- Devis versionné (`Quote`/`QuoteVersion`/`QuoteItem`) : cycle complet
+  DRAFT → SENT → ACCEPTED/REJECTED/MODIFICATION_REQUESTED, avec émission
+  d'une nouvelle version (jamais d'édition en place) après une demande de
+  modification client. Un nouveau devis reste possible après un refus.
+- Une seule nouvelle migration depuis la Phase 3 : ajout de
+  `sequenceNumber` sur `DiagnosticReport` et `Quote` (généré à la main,
+  `prisma migrate dev` refusant de tourner en non interactif — déjà rencontré
+  en Phase 3 — puis appliqué via `prisma migrate deploy`).
+- Interface client : `/espace-client/rapports` et `/espace-client/devis`
+  (liste + détail), les deux entrées du tableau de bord passent de
+  `available: false` à actives.
+- Interface production : deux nouvelles sections sur la fiche demande
+  existante (`ReportEditor`, `QuoteEditor`), aucune nouvelle URL de
+  production.
+- 18 nouveaux tests unitaires (104 au total).
+- Documentation complète : `docs/REPORTS-QUOTES.md`.
+
+## Non couvert par la Phase 6 (volontairement)
+
+`WorkOrder` (ordre de travail, réparation — Phase 7), facturation, carnet
+d'entretien, expiration automatique des devis, affichage du motif de refus/
+de la note de modification côté UI production (journalisé mais pas encore
+affiché) — voir `REPORTS-QUOTES.md` pour le détail de chaque limite assumée.
+
 ## PostgreSQL
 
 Résolu en Phase 2.5 : Docker Desktop restait bloqué sur cette machine (jamais
 dépassé son initialisation depuis l'installation) — contournement définitif via
 **Neon** (PostgreSQL cloud), `DATABASE_URL` pointant vers un projet Neon réel depuis
-lors. Toutes les migrations (P2.5, P3 — aucune nouvelle migration en P4/P5, le
-schéma existant suffisait) ont été appliquées et validées contre cette base
-réelle, pas contre un mock.
+lors. Toutes les migrations (P2.5, P3, P6 — aucune nouvelle migration en
+P4/P5, le schéma existant suffisait) ont été appliquées et validées contre
+cette base réelle, pas contre un mock.

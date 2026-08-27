@@ -23,6 +23,12 @@ function matches(row: Row, where: Record<string, unknown>): boolean {
       if (row[key] === (condition as { not: unknown }).not) return false;
       continue;
     }
+    // Raccourci Prisma { status: { in: ["A", "B"] } } — ajouté en Phase 6
+    // pour createQuote() (recherche d'un devis actif parmi plusieurs statuts).
+    if (condition !== null && typeof condition === "object" && "in" in condition) {
+      if (!(condition as { in: unknown[] }).in.includes(row[key])) return false;
+      continue;
+    }
     if (row[key] !== condition) return false;
   }
   return true;
@@ -55,7 +61,14 @@ export function createFakeDb() {
   let diagnostics: Row[] = [];
   let diagnosticChecks: Row[] = [];
   let diagnosticFaultCodes: Row[] = [];
+  let diagnosticReports: Row[] = [];
+  let reportPhotos: Row[] = [];
+  let quotes: Row[] = [];
+  let quoteVersions: Row[] = [];
+  let quoteItems: Row[] = [];
   let nextSrSequence = 1;
+  let nextReportSequence = 1;
+  let nextQuoteSequence = 1;
 
   function withRequestExtras(row: Row) {
     return {
@@ -108,6 +121,70 @@ export function createFakeDb() {
         return { id: apt.id, serviceRequest: sr ? { referenceNumber: sr.referenceNumber } : null };
       })(),
     };
+  }
+
+  // Phase 6 — même limite documentée pour withDiagnosticExtras : forme
+  // suffisante pour la logique applicative testée, pas une réplique fidèle
+  // complète de la forme Prisma (ex. diagnostic.appointment reste null ici,
+  // aucun test n'en a besoin — vérifié en conditions réelles via Neon).
+  function withReportExtras(row: Row) {
+    const diagnostic = diagnostics.find((d) => d.id === row.diagnosticId);
+    const vehicle = diagnostic ? (vehicles.find((v) => v.id === diagnostic.vehicleId) ?? null) : null;
+    return {
+      ...row,
+      photos: reportPhotos.filter((p) => p.reportId === row.id),
+      diagnostic: diagnostic
+        ? {
+            id: diagnostic.id,
+            symptoms: diagnostic.symptoms,
+            mileageAtVisit: diagnostic.mileageAtVisit,
+            checks: diagnosticChecks.filter((c) => c.diagnosticId === diagnostic.id),
+            faultCodes: diagnosticFaultCodes.filter((f) => f.diagnosticId === diagnostic.id),
+            vehicle,
+            appointment: null,
+          }
+        : null,
+    };
+  }
+
+  // where.diagnostic.vehicle.customerId (relation imbriquée à 2 niveaux) :
+  // hors de portée de matches() générique, géré ici spécifiquement pour
+  // listPublishedReportsForCustomer()/getPublishedReportForCustomer().
+  function matchesReportWhere(row: Row, where: Record<string, unknown>): boolean {
+    const { diagnostic: diagnosticWhere, ...flat } = where as {
+      diagnostic?: { vehicle?: { customerId?: string } };
+    } & Record<string, unknown>;
+    if (!matches(row, flat)) return false;
+    if (diagnosticWhere?.vehicle?.customerId !== undefined) {
+      const diag = diagnostics.find((d) => d.id === row.diagnosticId);
+      const veh = diag ? vehicles.find((v) => v.id === diag.vehicleId) : null;
+      if (!veh || veh.customerId !== diagnosticWhere.vehicle.customerId) return false;
+    }
+    return true;
+  }
+
+  function withQuoteExtras(row: Row) {
+    const diagnostic = diagnostics.find((d) => d.id === row.diagnosticId);
+    return {
+      ...row,
+      vehicle: vehicles.find((v) => v.id === row.vehicleId) ?? null,
+      diagnostic: diagnostic ? { id: diagnostic.id, appointment: null } : null,
+      versions: quoteVersions
+        .filter((v) => v.quoteId === row.id)
+        .sort((a, b) => (a.versionNumber as number) - (b.versionNumber as number))
+        .map((v) => ({ ...v, items: quoteItems.filter((it) => it.quoteVersionId === v.id) })),
+    };
+  }
+
+  // where.vehicle.customerId : même limite que matchesReportWhere ci-dessus.
+  function matchesQuoteWhere(row: Row, where: Record<string, unknown>): boolean {
+    const { vehicle: vehicleWhere, ...flat } = where as { vehicle?: { customerId?: string } } & Record<string, unknown>;
+    if (!matches(row, flat)) return false;
+    if (vehicleWhere?.customerId !== undefined) {
+      const veh = vehicles.find((v) => v.id === row.vehicleId);
+      if (!veh || veh.customerId !== vehicleWhere.customerId) return false;
+    }
+    return true;
   }
 
   function genericModel(store: { get: () => Row[]; set: (rows: Row[]) => void }, defaults: Record<string, unknown>) {
@@ -353,6 +430,109 @@ export function createFakeDb() {
     },
   };
 
+  const diagnosticReportModel = {
+    async create({ data }: { data: Record<string, unknown> }) {
+      const row: Row = {
+        id: randomUUID(),
+        sequenceNumber: nextReportSequence++,
+        createdAt: new Date(),
+        conclusion: null,
+        severity: "NORMAL",
+        publishedAt: null,
+        publishedById: null,
+        ...data,
+      } as Row;
+      diagnosticReports.push(row);
+      return row;
+    },
+    async update({ where, data }: { where: { id: string }; data: Record<string, unknown> }) {
+      const row = diagnosticReports.find((r) => r.id === where.id);
+      if (!row) throw new Error("Record to update not found.");
+      Object.assign(row, data);
+      return withReportExtras(row);
+    },
+    async findUnique({ where }: { where: Record<string, unknown> }) {
+      const row = diagnosticReports.find((r) => matches(r, where));
+      return row ? withReportExtras(row) : null;
+    },
+    async findFirst({ where }: { where: Record<string, unknown> }) {
+      const row = diagnosticReports.find((r) => matchesReportWhere(r, where));
+      return row ? withReportExtras(row) : null;
+    },
+    async findMany({ where, orderBy }: { where: Record<string, unknown>; orderBy?: unknown }) {
+      const rows = applyOrder(diagnosticReports.filter((r) => matchesReportWhere(r, where)), orderBy);
+      return rows.map(withReportExtras);
+    },
+  };
+
+  const reportPhotoModel = {
+    async create({ data }: { data: Record<string, unknown> }) {
+      const row: Row = { id: randomUUID(), caption: null, ...data } as Row;
+      reportPhotos.push(row);
+      return row;
+    },
+    async delete({ where }: { where: { id: string } }) {
+      const idx = reportPhotos.findIndex((r) => r.id === where.id);
+      if (idx === -1) throw new Error("Record to delete not found.");
+      const [removed] = reportPhotos.splice(idx, 1);
+      return removed;
+    },
+  };
+
+  const quoteModel = {
+    async create({ data }: { data: Record<string, unknown> }) {
+      const row: Row = {
+        id: randomUUID(),
+        sequenceNumber: nextQuoteSequence++,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        currentVersion: 1,
+        status: "DRAFT",
+        totalAmount: null,
+        currency: "XOF",
+        acceptedAt: null,
+        acceptedById: null,
+        ...data,
+      } as Row;
+      quotes.push(row);
+      return row;
+    },
+    async update({ where, data }: { where: { id: string }; data: Record<string, unknown> }) {
+      const row = quotes.find((r) => r.id === where.id);
+      if (!row) throw new Error("Record to update not found.");
+      Object.assign(row, data, { updatedAt: new Date() });
+      return withQuoteExtras(row);
+    },
+    async findUnique({ where }: { where: Record<string, unknown> }) {
+      const row = quotes.find((r) => matches(r, where));
+      return row ? withQuoteExtras(row) : null;
+    },
+    async findFirst({ where, orderBy }: { where: Record<string, unknown>; orderBy?: unknown }) {
+      const rows = applyOrder(quotes.filter((r) => matchesQuoteWhere(r, where)), orderBy);
+      return rows[0] ? withQuoteExtras(rows[0]) : null;
+    },
+    async findMany({ where, orderBy }: { where: Record<string, unknown>; orderBy?: unknown }) {
+      const rows = applyOrder(quotes.filter((r) => matchesQuoteWhere(r, where)), orderBy);
+      return rows.map(withQuoteExtras);
+    },
+  };
+
+  const quoteVersionModel = {
+    async create({ data }: { data: Record<string, unknown> }) {
+      const row: Row = { id: randomUUID(), createdAt: new Date(), ...data } as Row;
+      quoteVersions.push(row);
+      return row;
+    },
+  };
+
+  const quoteItemModel = {
+    async create({ data }: { data: Record<string, unknown> }) {
+      const row: Row = { id: randomUUID(), partId: null, ...data } as Row;
+      quoteItems.push(row);
+      return row;
+    },
+  };
+
   const fakeDb = {
     vehicle: vehicleModel,
     customer: customerModel,
@@ -366,6 +546,11 @@ export function createFakeDb() {
     diagnostic: diagnosticModel,
     diagnosticCheck: diagnosticCheckModel,
     diagnosticFaultCode: diagnosticFaultCodeModel,
+    diagnosticReport: diagnosticReportModel,
+    reportPhoto: reportPhotoModel,
+    quote: quoteModel,
+    quoteVersion: quoteVersionModel,
+    quoteItem: quoteItemModel,
     async $transaction(fnOrArray: unknown) {
       if (typeof fnOrArray === "function") {
         return (fnOrArray as (tx: typeof fakeDb) => unknown)(fakeDb);
@@ -393,6 +578,7 @@ export function createFakeDb() {
     _appointments: appointments,
     _technicianAssignments: technicianAssignments,
     _diagnostics: diagnostics,
+    _quotes: quotes,
     _reset() {
       vehicles = [];
       customers = [];
@@ -406,11 +592,19 @@ export function createFakeDb() {
       diagnostics = [];
       diagnosticChecks = [];
       diagnosticFaultCodes = [];
+      diagnosticReports = [];
+      reportPhotos = [];
+      quotes = [];
+      quoteVersions = [];
+      quoteItems = [];
       nextSrSequence = 1;
+      nextReportSequence = 1;
+      nextQuoteSequence = 1;
       fakeDb._serviceRequests = serviceRequests;
       fakeDb._appointments = appointments;
       fakeDb._technicianAssignments = technicianAssignments;
       fakeDb._diagnostics = diagnostics;
+      fakeDb._quotes = quotes;
     },
   };
 

@@ -11,6 +11,8 @@ import {
 import { TechnicianConflictError, AssignmentNotFoundError } from "@/lib/technicians/service";
 import { ForbiddenTechnicianRoleError } from "@/lib/technicians/guard";
 import { DiagnosticNotFoundError, DiagnosticConflictError } from "@/lib/diagnostics/service";
+import { ReportNotFoundError, ReportConflictError } from "@/lib/reports/service";
+import { QuoteNotFoundError, QuoteConflictError } from "@/lib/quotes/service";
 
 // Catalogue d'erreurs HTTP de l'API (section 13 de la Phase 2) :
 //   400 Données invalides         — payload rejeté par un schéma zod
@@ -59,6 +61,10 @@ export function jsonFromKnownError(err: unknown) {
   if (err instanceof ForbiddenTechnicianRoleError) return jsonError(err.message, 403);
   if (err instanceof DiagnosticNotFoundError) return jsonError(err.message, 404);
   if (err instanceof DiagnosticConflictError) return jsonError(err.message, 409);
+  if (err instanceof ReportNotFoundError) return jsonError(err.message, 404);
+  if (err instanceof ReportConflictError) return jsonError(err.message, 409);
+  if (err instanceof QuoteNotFoundError) return jsonError(err.message, 404);
+  if (err instanceof QuoteConflictError) return jsonError(err.message, 409);
   return null;
 }
 
