@@ -1,12 +1,15 @@
 import { z } from "zod";
 import { FuelType, TransmissionType, VehicleBodyType } from "@prisma/client";
+import { validatePlateNumber } from "@/lib/vehicles/registration/plate";
 
 const CURRENT_YEAR = new Date().getFullYear();
 
-// Validation robuste mais volontairement permissive sur les formats maliens
-// (section 8 de la Phase 2) : on ne bloque pas un véhicule légitime parce que
-// son immatriculation ne suit pas un motif précis, ou que son VIN n'a pas
-// exactement 17 caractères (véhicules anciens, importés, etc.).
+// Validation robuste mais volontairement permissive sur les caractéristiques
+// libres (section 8 de la Phase 2) : on ne bloque pas un véhicule légitime
+// parce que son VIN n'a pas exactement 17 caractères (véhicules anciens,
+// importés, etc.). L'immatriculation, elle, est strictement validée contre
+// le format LL CCC LL (MVP volontairement simplifié à ce seul format, aucune
+// donnée territoriale) — voir src/lib/vehicles/registration/plate.ts.
 
 const yearField = z
   .coerce.number()
@@ -32,7 +35,15 @@ export const vehicleInputSchema = z.object({
   fuelType: z.nativeEnum(FuelType),
   engine: z.string().trim().max(60).optional().or(z.literal("")),
   transmission: z.nativeEnum(TransmissionType).optional().nullable(),
-  licensePlate: z.string().trim().min(1, "L'immatriculation est obligatoire.").max(20),
+  // Saisie brute utilisateur — "AB123CD", "AB 123 CD" ou "ab123cd" sont tous
+  // acceptés ici (ne pas exiger que l'utilisateur connaisse la structure
+  // technique) ; la normalisation se fait dans src/lib/vehicles/service.ts
+  // via normalizePlateNumber(), jamais dupliquée ici.
+  plateInput: z
+    .string()
+    .trim()
+    .min(1, "Le numéro d'immatriculation est obligatoire.")
+    .refine(validatePlateNumber, "Le numéro d'immatriculation doit respecter le format malien LL CCC LL."),
   vin: z.string().trim().max(32).optional().or(z.literal("")),
   mileage: mileageField,
   color: z.string().trim().max(40).optional().or(z.literal("")),

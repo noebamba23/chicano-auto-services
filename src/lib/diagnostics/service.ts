@@ -28,7 +28,16 @@ export class DiagnosticConflictError extends Error {
 const DIAGNOSTIC_INCLUDE = {
   checks: true,
   faultCodes: { orderBy: { createdAt: "asc" as const } },
-  vehicle: { select: { make: true, model: true, chicanoVehicleId: true } },
+  vehicle: {
+    select: {
+      make: true,
+      model: true,
+      chicanoVehicleId: true,
+      licensePlate: true,
+      vin: true,
+      year: true,
+    },
+  },
   appointment: {
     select: { id: true, serviceRequest: { select: { referenceNumber: true } } },
   },

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { ZodError } from "zod";
 import { UnauthenticatedError, UnverifiedAccountError } from "@/lib/vehicles/guard";
 import { VehicleNotFoundError, VehicleConflictError } from "@/lib/vehicles/service";
+import { InvalidPlateFormatError } from "@/lib/vehicles/registration/plate";
 import { ForbiddenRoleError } from "@/lib/rbac";
 import {
   ServiceRequestNotFoundError,
@@ -49,6 +50,7 @@ export function jsonFromKnownError(err: unknown) {
   if (err instanceof UnverifiedAccountError) return jsonError(err.message, 403);
   if (err instanceof VehicleNotFoundError) return jsonError(err.message, 404);
   if (err instanceof VehicleConflictError) return jsonError(err.message, 409);
+  if (err instanceof InvalidPlateFormatError) return jsonError(err.message, 400);
   if (err instanceof ForbiddenRoleError) return jsonError(err.message, 403);
   if (err instanceof ServiceRequestNotFoundError) return jsonError(err.message, 404);
   if (err instanceof ServiceRequestConflictError) return jsonError(err.message, 409);

@@ -20,6 +20,16 @@ function matches(row: Row, where: Record<string, unknown>): boolean {
       if (matches(row, condition as Record<string, unknown>)) return false;
       continue;
     }
+    // Raccourci Prisma { contains, mode: "insensitive" } — ajouté pour
+    // findVehiclesByPlateForProduction() (évolution "IMMATRICULATION MALI",
+    // section 12 : recherche normalisée).
+    if (condition !== null && typeof condition === "object" && "contains" in condition) {
+      const { contains, mode } = condition as { contains: string; mode?: string };
+      const haystack = mode === "insensitive" ? String(row[key] ?? "").toUpperCase() : String(row[key] ?? "");
+      const needle = mode === "insensitive" ? contains.toUpperCase() : contains;
+      if (!haystack.includes(needle)) return false;
+      continue;
+    }
     if (row[key] !== condition) return false;
   }
   return true;

@@ -8,6 +8,7 @@ import {
   VehicleNotFoundError,
 } from "@/lib/vehicles/service";
 import { ServiceRequestWizard } from "@/components/service-requests/service-request-wizard";
+import { formatPlateNumber } from "@/lib/vehicles/registration/plate";
 
 const TYPE_TO_CATEGORY: Record<string, string> = {
   diagnostic: "DIAGNOSTIC",
@@ -54,6 +55,9 @@ export default async function DemandeServicePage({
                 <p className="font-semibold text-chicano-black">
                   {v.make} {v.model}
                 </p>
+                {v.licensePlate && (
+                  <p className="text-sm font-medium text-chicano-black">{formatPlateNumber(v.licensePlate)}</p>
+                )}
                 <p className="text-xs text-chicano-gray">{v.chicanoVehicleId}</p>
               </Link>
             ))}

@@ -13,6 +13,7 @@ import { AssignTechnicianForm } from "@/components/production/assign-technician-
 import { listTechnicians, getActiveAssignmentForAppointment } from "@/lib/technicians/service";
 import { getLatestDiagnosticForAppointment } from "@/lib/diagnostics/service";
 import { diagnosticStatusLabel, checkCategoryLabel, checkResultLabel } from "@/lib/diagnostics/options";
+import { formatPlateNumber } from "@/lib/vehicles/registration/plate";
 
 export default async function ProductionServiceRequestPage({
   params,
@@ -50,6 +51,9 @@ export default async function ProductionServiceRequestPage({
       <section className="mt-6 rounded-lg border border-white/10 bg-white/5 p-6">
         <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Field label="Véhicule" value={`${request.vehicle.make} ${request.vehicle.model} (${request.vehicle.chicanoVehicleId})`} />
+          {request.vehicle.licensePlate && (
+            <Field label="Immatriculation" value={formatPlateNumber(request.vehicle.licensePlate) ?? ""} />
+          )}
           <Field label="Service" value={serviceCategoryLabel(request.category)} />
           <Field label="Mode d'intervention" value={interventionTypeLabel(request.interventionType)} />
           <Field label="Urgence" value={request.isUrgent ? "🔴 Urgent" : "Non"} />

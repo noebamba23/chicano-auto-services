@@ -4,6 +4,7 @@ import { getSession } from "@/lib/auth/session";
 import { getTechnicianIdForUser, getAssignmentForTechnician, AssignmentNotFoundError } from "@/lib/technicians/service";
 import { interventionTypeLabel, serviceCategoryLabel, slotLabel } from "@/lib/service-requests/options";
 import { InterventionActions } from "@/components/technicien/intervention-actions";
+import { formatPlateNumber } from "@/lib/vehicles/registration/plate";
 
 const ASSIGNMENT_STATUS_LABELS: Record<string, string> = {
   ASSIGNED: "À faire",
@@ -55,6 +56,9 @@ export default async function TechnicienInterventionPage({
       <section className="mt-6 rounded-lg border border-white/10 bg-white/5 p-6">
         <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Field label="Véhicule" value={`${appointment.vehicle.make} ${appointment.vehicle.model} (${appointment.vehicle.chicanoVehicleId})`} />
+          {appointment.vehicle.licensePlate && (
+            <Field label="Immatriculation" value={formatPlateNumber(appointment.vehicle.licensePlate) ?? ""} />
+          )}
           <Field label="Service" value={serviceCategoryLabel(appointment.serviceRequest.category)} />
           <Field label="Mode d'intervention" value={interventionTypeLabel(appointment.interventionType)} />
           <Field label="Urgence" value={appointment.serviceRequest.isUrgent ? "🔴 Urgent" : "Non"} />

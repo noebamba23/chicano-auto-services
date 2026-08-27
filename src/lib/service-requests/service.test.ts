@@ -45,7 +45,7 @@ const VALID_INPUT = {
 
 beforeEach(() => {
   fakeDb._reset();
-  fakeDb._seedVehicle({ id: VEHICLE_A, customerId: CUSTOMER_A });
+  fakeDb._seedVehicle({ id: VEHICLE_A, customerId: CUSTOMER_A, licensePlate: "AB123CD" });
   fakeDb._seedVehicle({ id: VEHICLE_B, customerId: CUSTOMER_B });
 });
 
@@ -61,6 +61,13 @@ describe("createServiceRequest", () => {
     await expect(
       createServiceRequest(CUSTOMER_A, { ...VALID_INPUT, vehicleId: VEHICLE_B })
     ).rejects.toThrow();
+  });
+
+  // Évolution "IMMATRICULATION MALI", section 14/20 (cas 14) : le client ne
+  // ressaisit jamais l'immatriculation, elle est héritée du véhicule.
+  it("hérite l'immatriculation du véhicule sans que le client la ressaisisse", async () => {
+    const request = await createServiceRequest(CUSTOMER_A, VALID_INPUT);
+    expect(request.vehicle.licensePlate).toBe("AB123CD");
   });
 
   it("refuse un véhicule archivé", async () => {

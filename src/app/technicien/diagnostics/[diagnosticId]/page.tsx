@@ -7,6 +7,7 @@ import { diagnosticStatusLabel } from "@/lib/diagnostics/options";
 import { DiagnosticChecklist } from "@/components/technicien/diagnostic-checklist";
 import { FaultCodesForm } from "@/components/technicien/fault-codes-form";
 import { CompleteDiagnosticButton } from "@/components/technicien/complete-diagnostic-button";
+import { formatPlateNumber } from "@/lib/vehicles/registration/plate";
 
 export default async function TechnicienDiagnosticPage({
   params,
@@ -38,8 +39,13 @@ export default async function TechnicienDiagnosticPage({
         <div>
           <h1 className="text-2xl font-bold">Diagnostic — {diagnostic.appointment.serviceRequest.referenceNumber}</h1>
           <p className="mt-1 text-sm text-white/60">
-            {diagnostic.vehicle.make} {diagnostic.vehicle.model} ({diagnostic.vehicle.chicanoVehicleId})
+            {diagnostic.vehicle.make} {diagnostic.vehicle.model}
+            {diagnostic.vehicle.year ? ` (${diagnostic.vehicle.year})` : ""} — {diagnostic.vehicle.chicanoVehicleId}
           </p>
+          {diagnostic.vehicle.licensePlate && (
+            <p className="mt-1 text-sm font-medium">{formatPlateNumber(diagnostic.vehicle.licensePlate)}</p>
+          )}
+          {diagnostic.vehicle.vin && <p className="text-xs text-white/50">VIN : {diagnostic.vehicle.vin}</p>}
         </div>
         <span className="rounded-full bg-white/10 px-3 py-1.5 text-sm font-semibold">
           {diagnosticStatusLabel(diagnostic.status)}

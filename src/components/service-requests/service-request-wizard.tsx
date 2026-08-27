@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import type { Vehicle } from "@prisma/client";
+import { formatPlateNumber } from "@/lib/vehicles/registration/plate";
 import {
   SERVICE_CATEGORY_OPTIONS,
   INTERVENTION_TYPE_OPTIONS,
@@ -198,6 +199,9 @@ export function ServiceRequestWizard({
             <p className="font-semibold text-chicano-black">
               {vehicle.make} {vehicle.model}
             </p>
+            {vehicle.licensePlate && (
+              <p className="text-sm font-medium text-chicano-black">{formatPlateNumber(vehicle.licensePlate)}</p>
+            )}
             <p className="text-sm text-chicano-gray">{vehicle.chicanoVehicleId}</p>
           </div>
           <Link

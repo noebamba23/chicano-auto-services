@@ -1,6 +1,7 @@
 import { db } from "@/lib/db";
 import { randomUUID } from "crypto";
 import { formatChicanoVehicleId } from "./vehicle-id";
+import { normalizePlateNumber, parsePlateNumber, InvalidPlateFormatError } from "./registration/plate";
 import type { VehicleInput } from "@/lib/validation/vehicles";
 import type { Prisma, VehicleStatus } from "@prisma/client";
 
@@ -53,6 +54,22 @@ export function listVehiclesForCustomer(customerId: string, status: VehicleStatu
   });
 }
 
+// Recherche production (section 12 de la demande "IMMATRICULATION MALI") —
+// aucun filtre d'ownership, réservée aux routes déjà gardées par
+// requireProductionRole(). Normalise TOUJOURS via normalizePlateNumber()
+// avant de comparer, jamais de logique de normalisation dupliquée ici :
+// "AB123CD", "AB 123 CD" et "ab123cd" doivent tous trouver le même véhicule.
+export function findVehiclesByPlateForProduction(rawPlateQuery: string) {
+  const normalized = normalizePlateNumber(rawPlateQuery);
+  if (!normalized) return Promise.resolve([]);
+
+  return db.vehicle.findMany({
+    where: { licensePlate: { contains: normalized, mode: "insensitive" } },
+    include: { ...VEHICLE_INCLUDE, customer: { include: { user: { select: { firstName: true, lastName: true, phoneE164: true } } } } },
+    orderBy: { createdAt: "desc" },
+  });
+}
+
 export async function getVehicleForCustomer(customerId: string, vehicleId: string) {
   const vehicle = await db.vehicle.findFirst({
     where: { id: vehicleId, customerId },
@@ -62,7 +79,23 @@ export async function getVehicleForCustomer(customerId: string, vehicleId: strin
   return vehicle;
 }
 
+// MVP simplifié (voir docs/VEHICLE-REGISTRATION-MALI.md) : seule la
+// validation du format LL CCC LL est appliquée, aucune donnée territoriale.
+// buildRegistrationFields() est le SEUL endroit qui parse/normalise
+// plateInput — jamais dupliqué ailleurs (fonction unique, utilisée partout).
+function buildRegistrationFields(plateInput: string) {
+  const parsed = parsePlateNumber(plateInput);
+  if (!parsed) throw new InvalidPlateFormatError();
+
+  return {
+    licensePlate: normalizePlateNumber(plateInput),
+    plateDataStatus: "STRUCTURED" as const,
+  };
+}
+
 function buildCreateData(input: VehicleInput) {
+  const registration = buildRegistrationFields(input.plateInput);
+
   return {
     chicanoVehicleId: `pending-${randomUUID()}`,
     make: input.make,
@@ -73,7 +106,7 @@ function buildCreateData(input: VehicleInput) {
     fuelType: input.fuelType,
     engine: input.engine || null,
     transmission: input.transmission ?? null,
-    licensePlate: input.licensePlate,
+    ...registration,
     vin: input.vin || null,
     mileage: input.mileage ?? null,
     color: input.color || null,
@@ -86,8 +119,8 @@ function buildCreateData(input: VehicleInput) {
 // dans le payload partiel — un champ absent (undefined) ne touche pas la
 // valeur existante en base ; un champ présent mais vide (chaîne vide) efface
 // explicitement la valeur.
-function buildUpdateData(input: Partial<VehicleInput>): Prisma.VehicleUpdateInput {
-  const data: Prisma.VehicleUpdateInput = {};
+function buildUpdateData(input: Partial<VehicleInput>): Prisma.VehicleUncheckedUpdateInput {
+  const data: Prisma.VehicleUncheckedUpdateInput = {};
 
   if (input.make !== undefined) data.make = input.make;
   if (input.model !== undefined) data.model = input.model;
@@ -97,7 +130,9 @@ function buildUpdateData(input: Partial<VehicleInput>): Prisma.VehicleUpdateInpu
   if (input.fuelType !== undefined) data.fuelType = input.fuelType;
   if (input.engine !== undefined) data.engine = input.engine || null;
   if (input.transmission !== undefined) data.transmission = input.transmission;
-  if (input.licensePlate !== undefined) data.licensePlate = input.licensePlate;
+  if (input.plateInput !== undefined) {
+    Object.assign(data, buildRegistrationFields(input.plateInput));
+  }
   if (input.vin !== undefined) data.vin = input.vin || null;
   if (input.mileage !== undefined) data.mileage = input.mileage;
   if (input.color !== undefined) data.color = input.color || null;
@@ -110,6 +145,8 @@ function buildUpdateData(input: Partial<VehicleInput>): Prisma.VehicleUpdateInpu
 }
 
 export async function createVehicle(customerId: string, input: VehicleInput) {
+  const createData = buildCreateData(input);
+
   return db.$transaction(async (tx) => {
     const existingCount = await tx.vehicle.count({ where: { customerId, status: "ACTIVE" } });
 
@@ -118,7 +155,7 @@ export async function createVehicle(customerId: string, input: VehicleInput) {
     // atomique même sous création concurrente (section 3 de la Phase 2).
     const created = await tx.vehicle.create({
       data: {
-        ...buildCreateData(input),
+        ...createData,
         customerId,
         isPrimary: existingCount === 0,
       },

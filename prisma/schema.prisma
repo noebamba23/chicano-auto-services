@@ -253,6 +253,20 @@ enum VehicleStatus {
   ARCHIVED
 }
 
+// Immatriculation malienne — MVP volontairement simplifié à la seule règle de
+// format LL CCC LL (2 lettres, 3 chiffres, 2 lettres). Toute donnée
+// territoriale (région/arrondissement/cercle) a été explicitement écartée du
+// modèle — voir docs/VEHICLE-REGISTRATION-MALI.md, section "Version MVP" et
+// src/lib/vehicles/registration/plate.ts pour le parsing/la validation.
+enum PlateDataStatus {
+  // Immatriculation validée avec succès contre le format LL CCC LL.
+  STRUCTURED
+  // Valeur conservée telle quelle (licensePlate), non validée contre le
+  // nouveau format sans inventer de donnée — état par défaut de toute donnée
+  // existante avant l'introduction de cette validation.
+  LEGACY_NEEDS_REVIEW
+}
+
 // Source d'un relevé de kilométrage — préparation des rappels d'entretien
 // (section 10 de la Phase 2).
 enum MileageSource {
@@ -280,7 +294,14 @@ model Vehicle {
   // carburant (fuelType), qui reste la valeur structurée/filtrable.
   engine                String?
   transmission          TransmissionType?
-  licensePlate          String?
+  // Chaîne normalisée complète (ex. "AB123CD") — validée contre le format
+  // LL CCC LL quand plateDataStatus = STRUCTURED (voir
+  // src/lib/vehicles/registration/plate.ts). Conservée telle quelle pour les
+  // véhicules existants avant l'introduction de cette validation
+  // (plateDataStatus = LEGACY_NEEDS_REVIEW) — jamais réinterprétée
+  // automatiquement.
+  licensePlate          String?  @unique
+  plateDataStatus       PlateDataStatus @default(LEGACY_NEEDS_REVIEW)
   vin                   String?
   mileage               Int?
   color                 String?
@@ -307,7 +328,6 @@ model Vehicle {
 
   @@index([customerId])
   @@index([customerId, isPrimary])
-  @@index([licensePlate])
   @@index([vin])
 }
 

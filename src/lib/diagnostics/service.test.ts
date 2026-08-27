@@ -41,7 +41,7 @@ const VALID_INPUT = {
 
 beforeEach(() => {
   fakeDb._reset();
-  fakeDb._seedVehicle({ id: VEHICLE_A, customerId: CUSTOMER_A });
+  fakeDb._seedVehicle({ id: VEHICLE_A, customerId: CUSTOMER_A, licensePlate: "AB123CD" });
   fakeDb._seedCustomer({ id: CUSTOMER_A, userId: "user-a" });
   fakeDb._seedTechnician({ id: TECH_A, user: { firstName: "DEMO", lastName: "TECHNICIEN A" } });
   fakeDb._seedTechnician({ id: TECH_B, user: { firstName: "DEMO", lastName: "TECHNICIEN B" } });
@@ -64,6 +64,14 @@ describe("startDiagnostic", () => {
 
     expect(diagnostic.status).toBe("IN_PROGRESS");
     expect(diagnostic.mileageAtVisit).toBe(45000);
+  });
+
+  // Évolution "IMMATRICULATION MALI", section 15/20 (cas 15) : le technicien
+  // ne ressaisit jamais l'immatriculation, elle est héritée du véhicule.
+  it("hérite l'immatriculation du véhicule sans que le technicien la ressaisisse", async () => {
+    const assignment = await createArrivedAssignment();
+    const diagnostic = await startDiagnostic(TECH_A, assignment.id, {});
+    expect(diagnostic.vehicle.licensePlate).toBe("AB123CD");
   });
 
   it("refuse de démarrer avant ARRIVED", async () => {

@@ -21,15 +21,17 @@ const {
   updateVehicle,
   setPrimaryVehicle,
   archiveVehicle,
+  findVehiclesByPlateForProduction,
   VehicleNotFoundError,
   VehicleConflictError,
 } = await import("./service");
+const { InvalidPlateFormatError } = await import("./registration/plate");
 
 const VALID_INPUT = {
   make: "Toyota",
   model: "Hilux",
   fuelType: "DIESEL" as const,
-  licensePlate: "AB 1234 MD",
+  plateInput: "AB123CD",
 } as Parameters<typeof createVehicle>[1];
 
 const CUSTOMER_A = "customer-a";
@@ -49,7 +51,7 @@ describe("createVehicle", () => {
 
   it("ne rend pas le 2e véhicule principal automatiquement", async () => {
     await createVehicle(CUSTOMER_A, VALID_INPUT);
-    const second = await createVehicle(CUSTOMER_A, { ...VALID_INPUT, model: "Corolla" });
+    const second = await createVehicle(CUSTOMER_A, { ...VALID_INPUT, model: "Corolla", plateInput: "EF456GH" });
     expect(second.isPrimary).toBe(false);
     expect(second.chicanoVehicleId).toBe("CHC-VH-000002");
   });
@@ -58,7 +60,7 @@ describe("createVehicle", () => {
 describe("listVehiclesForCustomer", () => {
   it("ne retourne que les véhicules du client demandé", async () => {
     await createVehicle(CUSTOMER_A, VALID_INPUT);
-    await createVehicle(CUSTOMER_B, { ...VALID_INPUT, model: "Corolla" });
+    await createVehicle(CUSTOMER_B, { ...VALID_INPUT, model: "Corolla", plateInput: "EF456GH" });
 
     const vehiclesA = await listVehiclesForCustomer(CUSTOMER_A);
     expect(vehiclesA).toHaveLength(1);
@@ -107,7 +109,7 @@ describe("updateVehicle", () => {
 describe("véhicule principal", () => {
   it("un seul véhicule principal à la fois — la sélection d'un nouveau désélectionne l'ancien", async () => {
     const first = await createVehicle(CUSTOMER_A, VALID_INPUT);
-    const second = await createVehicle(CUSTOMER_A, { ...VALID_INPUT, model: "Corolla" });
+    const second = await createVehicle(CUSTOMER_A, { ...VALID_INPUT, model: "Corolla", plateInput: "EF456GH" });
 
     expect(first.isPrimary).toBe(true);
     expect(second.isPrimary).toBe(false);
@@ -148,7 +150,7 @@ describe("archivage", () => {
 
   it("promeut automatiquement un autre véhicule actif si le principal est archivé", async () => {
     const first = await createVehicle(CUSTOMER_A, VALID_INPUT);
-    const second = await createVehicle(CUSTOMER_A, { ...VALID_INPUT, model: "Corolla" });
+    const second = await createVehicle(CUSTOMER_A, { ...VALID_INPUT, model: "Corolla", plateInput: "EF456GH" });
     expect(first.isPrimary).toBe(true);
 
     await archiveVehicle(CUSTOMER_A, first.id);
@@ -163,6 +165,50 @@ describe("archivage", () => {
     const vehicle = await createVehicle(CUSTOMER_A, VALID_INPUT);
     await archiveVehicle(CUSTOMER_A, vehicle.id);
     await expect(archiveVehicle(CUSTOMER_A, vehicle.id)).rejects.toThrow(VehicleConflictError);
+  });
+});
+
+// MVP simplifié (voir docs/VEHICLE-REGISTRATION-MALI.md) : seule la
+// validation du format LL CCC LL, aucune donnée territoriale.
+describe("immatriculation — format LL CCC LL (MVP)", () => {
+  it("normalise et marque plateDataStatus STRUCTURED", async () => {
+    const vehicle = await createVehicle(CUSTOMER_A, VALID_INPUT);
+    expect(vehicle.licensePlate).toBe("AB123CD");
+    expect(vehicle.plateDataStatus).toBe("STRUCTURED");
+  });
+
+  it("normalise une saisie avec espaces/minuscules avant stockage", async () => {
+    const vehicle = await createVehicle(CUSTOMER_A, { ...VALID_INPUT, plateInput: "ab 123 cd" });
+    expect(vehicle.licensePlate).toBe("AB123CD");
+  });
+
+  it("refuse un format non conforme (défense en profondeur, la validation zod bloque déjà en amont)", async () => {
+    await expect(createVehicle(CUSTOMER_A, { ...VALID_INPUT, plateInput: "AB1234CD" })).rejects.toThrow(
+      InvalidPlateFormatError
+    );
+  });
+
+  it("updateVehicle peut mettre à jour la plaque seule", async () => {
+    const vehicle = await createVehicle(CUSTOMER_A, VALID_INPUT);
+    const updated = await updateVehicle(CUSTOMER_A, vehicle.id, { plateInput: "EF456GH" });
+    expect(updated.licensePlate).toBe("EF456GH");
+    expect(updated.plateDataStatus).toBe("STRUCTURED");
+  });
+});
+
+describe("findVehiclesByPlateForProduction — recherche normalisée (section 12/20 cas 12)", () => {
+  it("trouve le véhicule avec AB123CD, AB 123 CD ou ab 123 cd", async () => {
+    await createVehicle(CUSTOMER_A, VALID_INPUT);
+
+    for (const query of ["AB123CD", "AB 123 CD", "ab 123 cd"]) {
+      const results = await findVehiclesByPlateForProduction(query);
+      expect(results).toHaveLength(1);
+    }
+  });
+
+  it("retourne un tableau vide pour une recherche vide", async () => {
+    await createVehicle(CUSTOMER_A, VALID_INPUT);
+    expect(await findVehiclesByPlateForProduction("   ")).toEqual([]);
   });
 });
 

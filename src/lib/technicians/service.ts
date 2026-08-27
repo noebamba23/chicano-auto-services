@@ -36,7 +36,7 @@ const ASSIGNMENT_INCLUDE = {
   appointment: {
     include: {
       serviceRequest: { select: { referenceNumber: true, category: true, isUrgent: true } },
-      vehicle: { select: { make: true, model: true, chicanoVehicleId: true } },
+      vehicle: { select: { make: true, model: true, chicanoVehicleId: true, licensePlate: true } },
       customer: { include: { user: { select: { firstName: true, lastName: true, phoneE164: true } } } },
       location: true,
       diagnostics: { orderBy: { startedAt: "desc" as const }, take: 1 },

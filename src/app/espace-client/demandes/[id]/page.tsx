@@ -11,6 +11,7 @@ import {
   urgencyReasonLabel,
 } from "@/lib/service-requests/options";
 import { CancelRequestButton } from "@/components/service-requests/cancel-request-button";
+import { formatPlateNumber } from "@/lib/vehicles/registration/plate";
 
 const CANCELLABLE_STATUSES = ["SUBMITTED", "UNDER_REVIEW", "RESCHEDULE_REQUESTED", "ACCEPTED"];
 
@@ -50,6 +51,9 @@ export default async function ServiceRequestDetailPage({ params }: { params: Pro
 
       <section className="mt-6 rounded-lg border border-chicano-gray-light bg-white p-6">
         <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          {request.vehicle.licensePlate && (
+            <Field label="Immatriculation" value={formatPlateNumber(request.vehicle.licensePlate) ?? ""} />
+          )}
           <Field label="Service" value={serviceCategoryLabel(request.category)} />
           <Field
             label="Mode d'intervention"

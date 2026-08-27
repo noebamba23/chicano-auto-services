@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { getSession } from "@/lib/auth/session";
 import { getCustomerIdForUser, getVehicleForCustomer, VehicleNotFoundError } from "@/lib/vehicles/service";
 import { bodyTypeLabel, fuelTypeLabel, transmissionLabel } from "@/lib/vehicles/options";
+import { formatPlateNumber } from "@/lib/vehicles/registration/plate";
 import { VehicleActions } from "@/components/vehicles/vehicle-actions";
 import { VehiclePhotoUploader } from "@/components/vehicles/vehicle-photo-uploader";
 
@@ -33,7 +34,7 @@ export default async function VehicleDetailPage({ params }: { params: Promise<{ 
     ["Année", vehicle.year],
     ["Type", bodyTypeLabel(vehicle.bodyType)],
     ["VIN", vehicle.vin ?? "Non renseigné"],
-    ["Immatriculation", vehicle.licensePlate],
+    ["Immatriculation", formatPlateNumber(vehicle.licensePlate)],
     ["Kilométrage", vehicle.mileage !== null ? `${vehicle.mileage.toLocaleString("fr-FR")} km` : null],
     ["Motorisation", vehicle.engine],
     ["Boîte de vitesses", transmissionLabel(vehicle.transmission)],

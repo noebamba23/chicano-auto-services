@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { Vehicle, VehiclePhoto } from "@prisma/client";
 import { fuelTypeLabel, transmissionLabel } from "@/lib/vehicles/options";
+import { formatPlateNumber } from "@/lib/vehicles/registration/plate";
 
 type VehicleWithPhotos = Vehicle & { photos: VehiclePhoto[] };
 
@@ -39,7 +40,7 @@ export function VehicleCard({ vehicle }: { vehicle: VehicleWithPhotos }) {
             .join(" • ")}
         </p>
         {vehicle.licensePlate && (
-          <p className="mt-1 text-sm font-medium text-chicano-black">{vehicle.licensePlate}</p>
+          <p className="mt-1 text-sm font-medium text-chicano-black">{formatPlateNumber(vehicle.licensePlate)}</p>
         )}
         {vehicle.mileage !== null && (
           <p className="mt-1 text-sm text-chicano-gray">{vehicle.mileage.toLocaleString("fr-FR")} km</p>

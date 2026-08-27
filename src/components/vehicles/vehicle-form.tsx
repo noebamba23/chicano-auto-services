@@ -4,6 +4,7 @@ import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import type { Vehicle } from "@prisma/client";
 import { BODY_TYPE_OPTIONS, FUEL_TYPE_OPTIONS, TRANSMISSION_OPTIONS } from "@/lib/vehicles/options";
+import { normalizePlateNumber, validatePlateNumber, formatPlateNumber } from "@/lib/vehicles/registration/plate";
 
 type Props = {
   vehicle?: Vehicle;
@@ -23,6 +24,10 @@ export function VehicleForm({ vehicle }: Props) {
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
+  const [plateInput, setPlateInput] = useState(vehicle?.licensePlate ?? "");
+
+  const platePreview = plateInput ? formatPlateNumber(plateInput) : null;
+  const plateValid = plateInput ? validatePlateNumber(plateInput) : true;
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -41,7 +46,7 @@ export function VehicleForm({ vehicle }: Props) {
       fuelType: String(form.get("fuelType") ?? "OTHER"),
       engine: String(form.get("engine") ?? ""),
       transmission: form.get("transmission") || null,
-      licensePlate: String(form.get("licensePlate") ?? ""),
+      plateInput: normalizePlateNumber(plateInput),
       vin: String(form.get("vin") ?? ""),
       mileage: form.get("mileage") ? Number(form.get("mileage")) : null,
       color: String(form.get("color") ?? ""),
@@ -108,15 +113,6 @@ export function VehicleForm({ vehicle }: Props) {
               className="input"
             />
           </Field>
-          <Field label="Immatriculation" htmlFor="licensePlate" errors={fieldErrors.licensePlate}>
-            <input
-              id="licensePlate"
-              name="licensePlate"
-              required
-              defaultValue={vehicle?.licensePlate ?? ""}
-              className="input"
-            />
-          </Field>
           <Field
             label="VIN / numéro de châssis"
             htmlFor="vin"
@@ -126,6 +122,32 @@ export function VehicleForm({ vehicle }: Props) {
             <input id="vin" name="vin" defaultValue={vehicle?.vin ?? ""} className="input" />
           </Field>
         </div>
+      </FormSection>
+
+      <FormSection title="Immatriculation">
+        <Field
+          label="Immatriculation"
+          htmlFor="plateInput"
+          errors={fieldErrors.plateInput}
+          hint="Format : LL CCC LL"
+        >
+          <input
+            id="plateInput"
+            value={plateInput}
+            onChange={(e) => setPlateInput(e.target.value)}
+            required
+            placeholder="AB 123 CD"
+            className="input sm:max-w-xs"
+          />
+          {plateInput && !plateValid && (
+            <p className="mt-1 text-xs text-chicano-red">
+              Le numéro d&apos;immatriculation doit respecter le format malien LL CCC LL.
+            </p>
+          )}
+          {plateInput && plateValid && platePreview && (
+            <p className="mt-1 text-xs text-chicano-gray">Aperçu : {platePreview}</p>
+          )}
+        </Field>
       </FormSection>
 
       <FormSection title="Caractéristiques">

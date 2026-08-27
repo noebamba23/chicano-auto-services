@@ -373,7 +373,14 @@ export function createFakeDb() {
       return Promise.all(fnOrArray as Promise<unknown>[]);
     },
     // Aides réservées aux tests.
-    _seedVehicle(row: { id: string; customerId: string; status?: string }) {
+    _seedVehicle(row: {
+      id: string;
+      customerId: string;
+      status?: string;
+      make?: string;
+      model?: string;
+      licensePlate?: string;
+    }) {
       vehicles.push({ status: "ACTIVE", ...row } as Row);
     },
     _seedCustomer(row: { id: string; userId: string }) {
