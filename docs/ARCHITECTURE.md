@@ -61,6 +61,9 @@ src/
         page.tsx                  Mes réparations (liste) (P7)
         [id]/page.tsx              Détail en lecture seule (P7)
       vehicules/[id]/page.tsx      + section Entretien/timeline historique (P8)
+      factures/
+        page.tsx                  Mes factures (liste, hors DRAFT) (P9)
+        [id]/page.tsx              Détail + bouton Payer (Mobile Money) (P9)
     production/
       layout.tsx                   Garde RBAC (PRODUCTION_STAFF/ADMIN/SUPER_ADMIN), dark mode, nav (P4)
       demandes/
@@ -73,6 +76,10 @@ src/
         [id]/page.tsx              Fiche + actions (planifier/affecter/transitions/contrôle qualité) (P7)
       maintenance/page.tsx         Rappels actifs (filtres) + véhicules sans plan (P8)
       vehicules/[id]/page.tsx      Fiche véhicule production (rappels/plans/historique) (P8)
+      facturation/
+        page.tsx                  Liste factures, filtres statut (P9)
+        [id]/page.tsx              Fiche + lignes/paiements/marge + actions (P9)
+      dashboard/page.tsx           KPI CEO (CA, marge, panier moyen...) (P9)
       techniciens/page.tsx         Liste lecture seule (P4)
     technicien/
       layout.tsx                   Garde RBAC (TECHNICIAN), dark mode (P5)
@@ -166,6 +173,13 @@ src/
       maintenance-reminders/[id]/request-appointment/route.ts    POST (client) — crée une ServiceRequest (P8)
       production/maintenance/route.ts                            GET (?window=today|7d|30d|overdue) (P8)
       production/maintenance/check-reminders/route.ts            POST — déclenchement manuel (P8)
+      production/billing/route.ts                                GET (liste, filtres) (P9)
+      production/billing/[id]/route.ts                           GET / PATCH (charges, tant que DRAFT) (P9)
+      production/billing/[id]/issue/route.ts                     POST — DRAFT → ISSUED (P9)
+      production/billing/[id]/cancel/route.ts                    POST (P9)
+      production/billing/[id]/payments/route.ts                  POST — toute méthode (P9)
+      production/billing/check-overdue/route.ts                  POST — déclenchement manuel (P9)
+      invoices/[id]/pay/route.ts                                  POST (client, Mobile Money uniquement) (P9)
   proxy.ts                          Garde d'accès (Node.js runtime, Next 16) — rôle sur /production, /technicien, /espace-client (P5)
   lib/
     db.ts                           Client Prisma singleton
@@ -247,6 +261,17 @@ src/
       service.ts                    MaintenancePlan/MaintenanceReminder + niveaux + notifications (P8)
       service.test.ts
       options.ts                    Libellés type/statut/niveau
+    billing/
+      service.ts                    Invoice/InvoiceItem/Payment + marge (créé via passQualityCheck()) (P9)
+      service.test.ts
+      dashboard.ts                   KPI production/CEO (calculés depuis les données réelles)
+      options.ts                    Libellés statut/type/méthode + formatXOF
+      reference.ts                  Génération CHC-FAC/CHC-PAY/CHC-RC-000001
+    payments/
+      provider.ts                   Interface PaymentProvider (P9)
+      get-provider.ts               Sélection manuel/Mobile Money par méthode
+      providers/manual-payment-provider.ts     CASH/BANK_TRANSFER/OTHER — confirme immédiatement
+      providers/mobile-money-provider.ts       Orange/Moov/Wave — NOT_CONFIGURED, jamais de faux paiement
   components/
     marketing/site-header.tsx, site-footer.tsx
     auth/logout-button.tsx
@@ -264,6 +289,7 @@ src/
       quote-editor.tsx                Créer un devis, l'envoyer, émettre une v2 (P6)
       work-order-actions.tsx          Planifier/affecter/transitions/contrôle qualité (P7)
       work-order-item-maintenance-select.tsx  Rattache une ligne à une opération d'entretien (P8)
+      invoice-actions.tsx              Émettre/annuler/enregistrer un paiement (P9)
     technicien/
       intervention-actions.tsx      Je pars/Je suis arrivé/Démarrer le diagnostic (P5)
       diagnostic-checklist.tsx      10 catégories, upsert par ligne (P5)
@@ -274,10 +300,12 @@ src/
       quote-response-actions.tsx    Accepter/Refuser/Demander modification (client) (P6)
     maintenance/
       reminder-appointment-button.tsx  "Prendre rendez-vous" → ServiceRequest pré-remplie (P8)
+    factures/
+      pay-button.tsx                   Payer (Mobile Money) — jamais de faux succès (P9)
 prisma/
-  schema.prisma                     Modèle de données complet (section 62) + extensions véhicule (P2) + demandes (P3) + sequenceNumber rapport/devis (P6) + Work Order refondu (P7) + carnet automobile étendu (P8)
-  seed.ts                           Templates de notification (30) + compte admin de test + techniciens démo (P4)
-  migrations/                       20260825001111_initial_schema, 20260825162443_service_requests, 20260826070000_diagnostic_report_quote_sequence (P6), 20260827100000_work_orders_phase7, 20260827100100_work_order_notifications (P7), 20260830000000_maintenance_type, 20260830000050_reminder_status, 20260830000100_maintenance_notifications (P8) — aucune nouvelle en P4/P5
+  schema.prisma                     Modèle de données complet (section 62) + extensions véhicule (P2) + demandes (P3) + sequenceNumber rapport/devis (P6) + Work Order refondu (P7) + carnet automobile étendu (P8) + facturation étendue (P9)
+  seed.ts                           Templates de notification (35) + compte admin de test + techniciens démo (P4)
+  migrations/                       20260825001111_initial_schema, 20260825162443_service_requests, 20260826070000_diagnostic_report_quote_sequence (P6), 20260827100000_work_orders_phase7, 20260827100100_work_order_notifications (P7), 20260830000000_maintenance_type, 20260830000050_reminder_status, 20260830000100_maintenance_notifications (P8), 20260901000000_billing, 20260901000100_billing_notifications, 20260901000200_payment_method (P9) — aucune nouvelle en P4/P5
 vitest.config.mts                   Configuration des tests unitaires (npm test)
 docker-compose.yml                  PostgreSQL local (port 5433) — non utilisé depuis P2.5, Neon en usage réel
 ```

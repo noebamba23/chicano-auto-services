@@ -39,6 +39,11 @@ const TEMPLATES: { event: NotificationEvent; body: string }[] = [
   { event: "MAINTENANCE_UPCOMING", body: "CHICANO AUTO SERVICES\nUn entretien approche pour votre véhicule {{vehicle}} : {{maintenanceType}}." },
   { event: "MAINTENANCE_DUE", body: "CHICANO AUTO SERVICES\nVotre entretien {{maintenanceType}} pour {{vehicle}} arrive à échéance." },
   { event: "MAINTENANCE_OVERDUE", body: "CHICANO AUTO SERVICES\nVotre entretien {{maintenanceType}} pour {{vehicle}} est en retard." },
+  { event: "INVOICE_ISSUED", body: "CHICANO AUTO SERVICES\nVotre facture {{reference}} est disponible." },
+  { event: "PAYMENT_RECEIVED", body: "CHICANO AUTO SERVICES\nNous avons bien reçu votre paiement de {{amount}} F CFA pour la facture {{reference}}." },
+  { event: "PAYMENT_PARTIAL", body: "CHICANO AUTO SERVICES\nAcompte de {{amount}} F CFA reçu pour la facture {{reference}}. Solde restant à régler." },
+  { event: "INVOICE_PAID", body: "CHICANO AUTO SERVICES\nVotre facture {{reference}} est intégralement réglée. Merci !" },
+  { event: "PAYMENT_FAILED", body: "CHICANO AUTO SERVICES\nVotre tentative de paiement pour la facture {{reference}} n'a pas abouti." },
 ];
 
 async function main() {

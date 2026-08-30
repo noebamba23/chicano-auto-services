@@ -10,15 +10,18 @@ const MAINTENANCE_TYPES = [
   "PERIODIC_SERVICE", "OTHER",
 ] as const;
 
-// Statut/minutage réel uniquement — jamais le prix ni la quantité, qui
-// proviennent du devis accepté (voir règle "ne pas modifier silencieusement
-// le périmètre financier approuvé"). maintenanceType rattache la ligne au
-// carnet d'entretien (Phase 8) — voir docs/MAINTENANCE.md.
+// Statut/minutage réel uniquement — jamais le prix client ni la quantité,
+// qui proviennent du devis accepté (voir règle "ne pas modifier
+// silencieusement le périmètre financier approuvé"). maintenanceType
+// rattache la ligne au carnet d'entretien (Phase 8). costPrice (Phase 9) est
+// le coût CHICANO — accessible uniquement ici (route production), jamais
+// depuis /api/technicien/... — voir docs/BILLING.md, section "Marge".
 const schema = z.object({
   status: z.enum(["PENDING", "DONE"]).optional(),
   actualMinutes: z.number().int().nonnegative().optional(),
   technicianId: z.string().optional(),
   maintenanceType: z.enum(MAINTENANCE_TYPES).nullable().optional(),
+  costPrice: z.number().nonnegative().nullable().optional(),
 });
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string; itemId: string }> }) {

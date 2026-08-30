@@ -9,7 +9,8 @@ import { randomUUID } from "crypto";
 
 type Row = Record<string, unknown> & { id: string };
 
-function matches(row: Row, where: Record<string, unknown>): boolean {
+function matches(row: Row, where: Record<string, unknown> | undefined): boolean {
+  if (!where) return true; // pas de filtre (ex. findMany({ select: ... }) sans where)
   for (const key of Object.keys(where)) {
     const condition = where[key];
     if (condition === undefined) continue; // filtre non appliqué (ex. filtres production optionnels)
@@ -80,10 +81,15 @@ export function createFakeDb() {
   let maintenancePlans: Row[] = [];
   let maintenanceReminders: Row[] = [];
   let mileageReadings: Row[] = [];
+  let invoices: Row[] = [];
+  let invoiceItems: Row[] = [];
+  let payments: Row[] = [];
   let nextSrSequence = 1;
   let nextReportSequence = 1;
   let nextQuoteSequence = 1;
   let nextWorkOrderSequence = 1;
+  let nextInvoiceSequence = 1;
+  let nextPaymentSequence = 1;
 
   function withRequestExtras(row: Row) {
     return {
@@ -634,6 +640,8 @@ export function createFakeDb() {
       parts: workOrderParts.filter((p) => p.workOrderId === row.id),
       photos: workOrderPhotos.filter((p) => p.workOrderId === row.id),
       transfer: workshopTransfers.find((t) => t.workOrderId === row.id) ?? null,
+      // Phase 9 — nécessaire à computeWorkOrderMargin() (src/lib/billing/service.ts).
+      invoice: invoices.find((inv) => inv.workOrderId === row.id) ?? null,
     };
   }
 
@@ -873,6 +881,115 @@ export function createFakeDb() {
     },
   };
 
+  // Phase 9 — facturation. withInvoiceExtras reproduit INVOICE_INCLUDE
+  // (src/lib/billing/service.ts) : customer/vehicle/workOrder imbriqués,
+  // items/payments par relation inverse — même limite documentée partout
+  // ailleurs dans ce fichier (forme suffisante pour la logique applicative,
+  // pas une réplique fidèle complète, vérifiée en conditions réelles via
+  // Neon).
+  function withInvoiceExtras(row: Row) {
+    const customer = customers.find((c) => c.id === row.customerId) ?? null;
+    const vehicle = vehicles.find((v) => v.id === row.vehicleId) ?? null;
+    const workOrder = workOrders.find((w) => w.id === row.workOrderId) ?? null;
+    return {
+      ...row,
+      customer,
+      vehicle,
+      workOrder: workOrder ? { id: workOrder.id, workOrderNumber: workOrder.workOrderNumber } : null,
+      items: applyOrder(invoiceItems.filter((i) => i.invoiceId === row.id), { id: "asc" }),
+      payments: applyOrder(payments.filter((p) => p.invoiceId === row.id), { createdAt: "asc" }),
+    };
+  }
+
+  const invoiceModel = {
+    async create({ data }: { data: Record<string, unknown> }) {
+      const row: Row = {
+        id: randomUUID(),
+        sequenceNumber: nextInvoiceSequence++,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        status: "DRAFT",
+        subtotal: 0,
+        discount: 0,
+        travelFee: 0,
+        tax: 0,
+        total: 0,
+        amountPaid: 0,
+        balanceDue: 0,
+        currency: "XOF",
+        quoteId: null,
+        quoteVersionNumber: null,
+        issuedAt: null,
+        dueAt: null,
+        paidAt: null,
+        ...data,
+      } as Row;
+      invoices.push(row);
+      return row;
+    },
+    async update({ where, data }: { where: { id: string }; data: Record<string, unknown> }) {
+      const row = invoices.find((r) => r.id === where.id);
+      if (!row) throw new Error("Record to update not found.");
+      Object.assign(row, data, { updatedAt: new Date() });
+      return withInvoiceExtras(row);
+    },
+    async findUnique({ where }: { where: Record<string, unknown> }) {
+      const row = invoices.find((r) => matches(r, where));
+      return row ? withInvoiceExtras(row) : null;
+    },
+    async findFirst({ where, orderBy }: { where: Record<string, unknown>; orderBy?: unknown }) {
+      const rows = applyOrder(invoices.filter((r) => matches(r, where)), orderBy);
+      return rows[0] ? withInvoiceExtras(rows[0]) : null;
+    },
+    async findMany({ where, orderBy }: { where: Record<string, unknown>; orderBy?: unknown }) {
+      const rows = applyOrder(invoices.filter((r) => matches(r, where)), orderBy);
+      return rows.map(withInvoiceExtras);
+    },
+    async count({ where }: { where: Record<string, unknown> }) {
+      return invoices.filter((r) => matches(r, where)).length;
+    },
+  };
+
+  const invoiceItemModel = {
+    async create({ data }: { data: Record<string, unknown> }) {
+      const row: Row = { id: randomUUID(), unit: null, sourceWorkOrderItemId: null, ...data } as Row;
+      invoiceItems.push(row);
+      return row;
+    },
+  };
+
+  const paymentModel = {
+    async create({ data }: { data: Record<string, unknown> }) {
+      const row: Row = {
+        id: randomUUID(),
+        sequenceNumber: nextPaymentSequence++,
+        createdAt: new Date(),
+        status: "PENDING",
+        externalReference: null,
+        transactionReference: null,
+        proofUrl: null,
+        notes: null,
+        receiptNumber: null,
+        paidAt: null,
+        ...data,
+      } as Row;
+      payments.push(row);
+      return row;
+    },
+    async update({ where, data }: { where: { id: string }; data: Record<string, unknown> }) {
+      const row = payments.find((r) => r.id === where.id);
+      if (!row) throw new Error("Record to update not found.");
+      Object.assign(row, data);
+      return row;
+    },
+    async findUnique({ where }: { where: Record<string, unknown> }) {
+      return payments.find((r) => matches(r, where)) ?? null;
+    },
+    async findMany({ where, orderBy }: { where: Record<string, unknown>; orderBy?: unknown }) {
+      return applyOrder(payments.filter((r) => matches(r, where)), orderBy);
+    },
+  };
+
   const fakeDb = {
     vehicle: vehicleModel,
     customer: customerModel,
@@ -899,6 +1016,9 @@ export function createFakeDb() {
     maintenancePlan: maintenancePlanModel,
     maintenanceReminder: maintenanceReminderModel,
     mileageReading: mileageReadingModel,
+    invoice: invoiceModel,
+    invoiceItem: invoiceItemModel,
+    payment: paymentModel,
     async $transaction(fnOrArray: unknown) {
       if (typeof fnOrArray === "function") {
         return (fnOrArray as (tx: typeof fakeDb) => unknown)(fakeDb);
@@ -953,10 +1073,15 @@ export function createFakeDb() {
       maintenancePlans = [];
       maintenanceReminders = [];
       mileageReadings = [];
+      invoices = [];
+      invoiceItems = [];
+      payments = [];
       nextSrSequence = 1;
       nextReportSequence = 1;
       nextQuoteSequence = 1;
       nextWorkOrderSequence = 1;
+      nextInvoiceSequence = 1;
+      nextPaymentSequence = 1;
       fakeDb._serviceRequests = serviceRequests;
       fakeDb._appointments = appointments;
       fakeDb._technicianAssignments = technicianAssignments;

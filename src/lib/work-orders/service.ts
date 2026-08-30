@@ -3,6 +3,7 @@ import { randomUUID } from "crypto";
 import { formatWorkOrderReference } from "./reference";
 import { sendNotification } from "@/lib/notifications/service";
 import { completeMaintenanceFromWorkOrder } from "@/lib/maintenance/service";
+import { createInvoiceFromWorkOrder } from "@/lib/billing/service";
 import type { Prisma, WorkOrderStatus, WorkOrderPartStatus, WorkOrderPhotoPhase, MaintenanceType } from "@prisma/client";
 
 // Work Order (Phase 7) — "DEVIS ACCEPTÉ → WORK ORDER → PLANIFICATION →
@@ -354,6 +355,11 @@ export async function passQualityCheck(
   // que les rappels liés sont clos et la prochaine échéance calculée.
   await completeMaintenanceFromWorkOrder(id);
 
+  // Facturation (Phase 9) — "WorkOrder → QUALITY_CHECK PASSED → COMPLETED →
+  // Invoice créée", jamais avant. createInvoiceFromWorkOrder() est
+  // idempotente (workOrderId unique sur Invoice).
+  await createInvoiceFromWorkOrder(id);
+
   return getWorkOrderForProduction(id);
 }
 
@@ -465,6 +471,10 @@ export async function updateWorkOrderItem(
     // src/lib/maintenance/service.ts::completeMaintenanceFromWorkOrder,
     // déclenché uniquement quand ce Work Order passe à COMPLETED).
     maintenanceType?: MaintenanceType | null;
+    // Phase 9 — coût CHICANO, jamais exposé au client ni au technicien
+    // (voir routes appelantes : uniquement /api/production/..., jamais
+    // /api/technicien/...).
+    costPrice?: number | null;
   }
 ) {
   const wo = await getWorkOrderForProduction(workOrderId);
@@ -478,6 +488,7 @@ export async function updateWorkOrderItem(
       actualMinutes: input.actualMinutes,
       technicianId: input.technicianId,
       maintenanceType: input.maintenanceType,
+      costPrice: input.costPrice,
     },
   });
 

@@ -15,6 +15,7 @@ const ACTIONS = [
   { emoji: "📄", label: "Mes rapports", href: "/espace-client/rapports", available: true },
   { emoji: "💰", label: "Mes devis", href: "/espace-client/devis", available: true },
   { emoji: "🛠️", label: "Mes réparations", href: "/espace-client/reparations", available: true },
+  { emoji: "🧾", label: "Mes factures", href: "/espace-client/factures", available: true },
 ];
 
 export default async function ClientDashboardPage() {

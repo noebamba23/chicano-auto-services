@@ -15,7 +15,7 @@ Ne pas paralléliser les phases : chacune se construit sur la précédente.
 | P6 | Rapport + devis | ✅ Fait — voir `REPORTS-QUOTES.md` |
 | P7 | Validation + réparation + clôture | ✅ Fait — voir `WORK-ORDERS.md` |
 | P8 | Historique + rappels | ✅ Fait — voir `MAINTENANCE.md` |
-| P9 | CRM + KPI | ⏳ À faire |
+| P9 | Facturation, paiements & rentabilité | ✅ Fait — voir `BILLING.md` (le libellé initial "CRM + KPI" est partiellement couvert : dashboard KPI livré, CRM avancé reste à faire) |
 | P10 | B2B / Fleet | ⏳ À faire |
 
 ## Détail Phase 1 (livrée)
@@ -293,11 +293,43 @@ modèle (aucune source constructeur vérifiée), système EV/Hybride
 spécialisé, diffusion de notification à un rôle — voir `MAINTENANCE.md`
 pour le détail de chaque limite assumée.
 
+## Détail Phase 9 (livrée)
+
+- Facturation (`Invoice`/`InvoiceItem`) : créée automatiquement quand un
+  Work Order passe à `COMPLETED` (`passQualityCheck()`), snapshot des
+  lignes (jamais recalculé depuis le devis), idempotente. Cycle
+  DRAFT → ISSUED → (PARTIALLY_PAID/OVERDUE) → PAID/CANCELLED.
+- Paiement (`Payment`) : acomptes multiples, solde recalculé, invariants
+  serveur (jamais `amountPaid > total`, jamais un montant ≤ 0). Reçu
+  (`CHC-RC-000001`) posé sur le paiement confirmé, pas une table séparée.
+- `PaymentProvider` (Cash/Mobile Money) : Espèces/virement/autre confirment
+  immédiatement (attestation production), Orange/Moov/Wave retournent
+  toujours `NOT_CONFIGURED` — aucune intégration API réelle, jamais de faux
+  paiement `PAID`.
+- Marge interne (`WorkOrderItem.costPrice`, jamais exposée au client ni au
+  technicien) : revenu - coût pièces - coût main-d'œuvre - coût autre.
+- Dashboard production (`/production/facturation`) et dashboard CEO
+  (`/production/dashboard`, KPI calculés depuis les données réelles).
+- Espace client (`/espace-client/factures`) avec bouton Payer (Mobile
+  Money uniquement, jamais CASH côté client).
+- 19 nouveaux tests unitaires (228 au total) + vérification réelle Neon
+  (scénario complet acompte → solde → PAID) + navigateur (client, production,
+  dashboard).
+- Documentation complète : `docs/BILLING.md`.
+
+## Non couvert par la Phase 9 (volontairement)
+
+Intégration API réelle Mobile Money, régime fiscal automatique, coût de
+déplacement distinctement suivi, génération PDF de facture, automatisation
+réelle du passage en retard (déclenchement manuel), CHICANO CARE
+(abonnements) et B2B/flotte complets — voir `BILLING.md` pour le détail de
+chaque limite assumée.
+
 ## PostgreSQL
 
 Résolu en Phase 2.5 : Docker Desktop restait bloqué sur cette machine (jamais
 dépassé son initialisation depuis l'installation) — contournement définitif via
 **Neon** (PostgreSQL cloud), `DATABASE_URL` pointant vers un projet Neon réel depuis
-lors. Toutes les migrations (P2.5, P3, P6, P7, P8 — aucune nouvelle migration en
+lors. Toutes les migrations (P2.5, P3, P6, P7, P8, P9 — aucune nouvelle migration en
 P4/P5, le schéma existant suffisait) ont été appliquées et validées contre
 cette base réelle, pas contre un mock.

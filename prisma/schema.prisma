@@ -116,6 +116,7 @@ model Customer {
   appointments  Appointment[]
   quotesAccepted Quote[] @relation("QuoteAcceptedBy")
   invoices      Invoice[]
+  payments      Payment[]
   leads         Lead[]
   workOrders    WorkOrder[]
 }
@@ -709,6 +710,7 @@ model Quote {
   acceptedBy      Customer?  @relation("QuoteAcceptedBy", fields: [acceptedById], references: [id])
   versions        QuoteVersion[]
   workOrder       WorkOrder?
+  invoices        Invoice[]
 
   @@index([status])
 }
@@ -868,11 +870,16 @@ model WorkOrderItem {
   // (voir MaintenanceType). Optionnel : la plupart des lignes de réparation
   // ne correspondent à aucun entretien planifié.
   maintenanceType   MaintenanceType?
+  // Phase 9 — coût CHICANO (achat pièce, coût horaire interne...), distinct
+  // du prix client (unitPrice/totalPrice ci-dessus). Jamais exposé au
+  // client — voir docs/BILLING.md, section "Marge".
+  costPrice         Decimal? @db.Decimal(12, 2)
   createdAt         DateTime @default(now())
 
   workOrder         WorkOrder @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
   sourceQuoteItem   QuoteItem? @relation(fields: [sourceQuoteItemId], references: [id])
   technician        Technician? @relation(fields: [technicianId], references: [id])
+  invoiceItems      InvoiceItem[]
 
   @@index([workOrderId])
 }
@@ -990,39 +997,99 @@ model Inventory {
 // FACTURATION
 // ============================================================
 
+// Facturation (Phase 9) — étend le placeholder posé en Phase 0 (confirmé
+// vide sur Neon avant modification). Le devis accepté reste la référence
+// commerciale, le Work Order la référence opérationnelle, la facture la
+// référence financière (voir docs/BILLING.md). Aucun régime fiscal inventé
+// — discount/travelFee/tax restent des montants libres, configurables.
 enum InvoiceStatus {
   DRAFT
   ISSUED
   PARTIALLY_PAID
   PAID
+  OVERDUE
   CANCELLED
 }
 
 model Invoice {
-  id              String   @id @default(cuid())
-  invoiceNumber   String   @unique
-  workOrderId     String?  @unique
-  customerId      String
-  vehicleId       String
-  amount          Decimal  @db.Decimal(12, 2)
-  currency        String   @default("XOF")
-  status          InvoiceStatus @default(DRAFT)
-  issuedAt        DateTime?
-  createdAt       DateTime @default(now())
+  id                 String   @id @default(cuid())
+  sequenceNumber     Int      @unique @default(autoincrement())
+  invoiceNumber      String   @unique // CHC-FAC-000001
+  customerId         String
+  vehicleId          String
+  workOrderId        String?  @unique
+  quoteId            String?
+  // Figé à la création depuis WorkOrder.acceptedQuoteVersionNumber — jamais
+  // recalculé (même principe que WorkOrder, voir docs/WORK-ORDERS.md).
+  quoteVersionNumber Int?
+  status             InvoiceStatus @default(DRAFT)
+  subtotal           Decimal  @default(0) @db.Decimal(12, 2)
+  discount           Decimal  @default(0) @db.Decimal(12, 2)
+  travelFee          Decimal  @default(0) @db.Decimal(12, 2)
+  tax                Decimal  @default(0) @db.Decimal(12, 2)
+  total              Decimal  @default(0) @db.Decimal(12, 2)
+  amountPaid         Decimal  @default(0) @db.Decimal(12, 2)
+  balanceDue         Decimal  @default(0) @db.Decimal(12, 2)
+  currency           String   @default("XOF")
+  issuedAt           DateTime?
+  dueAt              DateTime?
+  paidAt             DateTime?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
-  workOrder       WorkOrder? @relation(fields: [workOrderId], references: [id])
-  customer        Customer   @relation(fields: [customerId], references: [id])
-  vehicle         Vehicle    @relation(fields: [vehicleId], references: [id])
-  payments        Payment[]
+  customer  Customer   @relation(fields: [customerId], references: [id])
+  vehicle   Vehicle    @relation(fields: [vehicleId], references: [id])
+  workOrder WorkOrder? @relation(fields: [workOrderId], references: [id])
+  quote     Quote?     @relation(fields: [quoteId], references: [id])
+  items     InvoiceItem[]
+  payments  Payment[]
+
+  @@index([customerId])
+  @@index([vehicleId])
+  @@index([status])
+  @@index([dueAt])
+}
+
+enum InvoiceItemType {
+  LABOR
+  PART
+  SERVICE
+  TRAVEL
+  OTHER
+}
+
+// Snapshot du prix réellement facturé — reprend WorkOrderItem (déjà lui-même
+// un snapshot figé du devis accepté depuis la Phase 7), jamais recalculé
+// depuis une valeur mutable du devis.
+model InvoiceItem {
+  id                    String   @id @default(cuid())
+  invoiceId             String
+  type                  InvoiceItemType
+  description           String
+  quantity              Decimal  @default(1) @db.Decimal(10, 2)
+  unit                  String?
+  unitPrice             Decimal  @db.Decimal(12, 2)
+  total                 Decimal  @db.Decimal(12, 2)
+  sourceWorkOrderItemId String?
+
+  invoice             Invoice        @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  sourceWorkOrderItem WorkOrderItem? @relation(fields: [sourceWorkOrderItemId], references: [id])
+
+  @@index([invoiceId])
 }
 
 enum PaymentMethod {
   CASH
-  MOBILE_MONEY
+  ORANGE_MONEY
+  MOOV_MONEY
+  WAVE
   BANK_TRANSFER
   OTHER
 }
 
+// FAILED couvre aussi une tentative Mobile Money via un provider non
+// configuré (jamais enregistrée comme CONFIRMED) — voir
+// src/lib/payments/providers/, docs/BILLING.md.
 enum PaymentStatus {
   PENDING
   CONFIRMED
@@ -1031,16 +1098,29 @@ enum PaymentStatus {
 }
 
 model Payment {
-  id              String   @id @default(cuid())
-  invoiceId       String
-  amount          Decimal  @db.Decimal(12, 2)
-  method          PaymentMethod
-  status          PaymentStatus @default(PENDING)
-  reference       String?
-  paidAt          DateTime?
-  createdAt       DateTime @default(now())
+  id                   String   @id @default(cuid())
+  sequenceNumber       Int      @unique @default(autoincrement())
+  paymentNumber        String   @unique // CHC-PAY-000001
+  invoiceId            String
+  customerId           String
+  amount               Decimal  @db.Decimal(12, 2)
+  method               PaymentMethod
+  status               PaymentStatus @default(PENDING)
+  externalReference    String?
+  transactionReference String?
+  proofUrl             String?
+  notes                String?
+  // Posé uniquement une fois le paiement CONFIRMED — le reçu est une
+  // référence sur le paiement, pas une table séparée (voir docs/BILLING.md).
+  receiptNumber        String?  @unique // CHC-RC-000001
+  paidAt               DateTime?
+  createdAt            DateTime @default(now())
 
-  invoice         Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  invoice  Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  customer Customer @relation(fields: [customerId], references: [id])
+
+  @@index([invoiceId])
+  @@index([customerId])
 }
 
 // ============================================================
@@ -1193,6 +1273,12 @@ enum NotificationEvent {
   MAINTENANCE_UPCOMING
   MAINTENANCE_DUE
   MAINTENANCE_OVERDUE
+  // Facturation (Phase 9).
+  INVOICE_ISSUED
+  PAYMENT_RECEIVED
+  PAYMENT_PARTIAL
+  INVOICE_PAID
+  PAYMENT_FAILED
 }
 
 enum NotificationStatus {
