@@ -12,6 +12,7 @@ import {
 import { formatXOF } from "@/lib/quotes/options";
 import { formatPlateNumber } from "@/lib/vehicles/registration/plate";
 import { WorkOrderActions } from "@/components/production/work-order-actions";
+import { WorkOrderItemMaintenanceSelect } from "@/components/production/work-order-item-maintenance-select";
 
 export default async function ProductionWorkOrderPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -99,14 +100,17 @@ export default async function ProductionWorkOrderPage({ params }: { params: Prom
         <h2 className="text-xs font-semibold uppercase tracking-wide text-white/50">Travaux</h2>
         <div className="mt-3 space-y-2">
           {workOrder.items.map((item) => (
-            <div key={item.id} className="flex items-center justify-between rounded-lg border border-white/10 bg-white/5 p-3">
+            <div key={item.id} className="flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-white/5 p-3">
               <div>
                 <p className="text-sm font-medium">{item.description}</p>
                 <p className="text-xs text-white/50">
                   {workOrderItemTypeLabel(item.type)} · {item.quantity ? Number(item.quantity) : 1} × {formatXOF(item.unitPrice)}
                 </p>
               </div>
-              <span className="rounded-full bg-white/10 px-2 py-0.5 text-xs">{workOrderItemStatusLabel(item.status)}</span>
+              <div className="flex items-center gap-2">
+                <WorkOrderItemMaintenanceSelect workOrderId={workOrder.id} itemId={item.id} value={item.maintenanceType} />
+                <span className="rounded-full bg-white/10 px-2 py-0.5 text-xs">{workOrderItemStatusLabel(item.status)}</span>
+              </div>
             </div>
           ))}
           {workOrder.items.length === 0 && <p className="text-sm text-white/50">Aucune ligne de travaux.</p>}

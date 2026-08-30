@@ -60,6 +60,7 @@ src/
       reparations/
         page.tsx                  Mes réparations (liste) (P7)
         [id]/page.tsx              Détail en lecture seule (P7)
+      vehicules/[id]/page.tsx      + section Entretien/timeline historique (P8)
     production/
       layout.tsx                   Garde RBAC (PRODUCTION_STAFF/ADMIN/SUPER_ADMIN), dark mode, nav (P4)
       demandes/
@@ -70,6 +71,8 @@ src/
       work-orders/
         page.tsx                   Work Orders — colonnes par statut (P7)
         [id]/page.tsx              Fiche + actions (planifier/affecter/transitions/contrôle qualité) (P7)
+      maintenance/page.tsx         Rappels actifs (filtres) + véhicules sans plan (P8)
+      vehicules/[id]/page.tsx      Fiche véhicule production (rappels/plans/historique) (P8)
       techniciens/page.tsx         Liste lecture seule (P4)
     technicien/
       layout.tsx                   Garde RBAC (TECHNICIAN), dark mode (P5)
@@ -93,6 +96,10 @@ src/
         [id]/set-primary/route.ts  POST
         [id]/archive/route.ts      POST
         [id]/photo/route.ts        POST (multipart, upload photo)
+        [id]/history/route.ts      GET (client, ?category=&offset=&limit=) (P8)
+        [id]/maintenance/route.ts  GET (client) (P8)
+        [id]/reminders/route.ts    GET (client) (P8)
+        [id]/mileage/route.ts      POST (client, jamais de régression forcée) (P8)
       service-requests/
         route.ts                   GET (liste mine) / POST (création)
         [id]/route.ts              GET / PATCH (édition restreinte, statut SUBMITTED uniquement)
@@ -137,6 +144,8 @@ src/
         work-orders/[id]/additional-work/route.ts                POST (P7)
         work-orders/[id]/items/[itemId]/route.ts                 PATCH — travail effectué (P7)
         work-orders/[id]/photos/route.ts                         POST (multipart, avant/après) (P7)
+        vehicles/[id]/mileage/route.ts                            POST (P8)
+      production/vehicles/[id]/mileage/route.ts                   POST — avec confirmed possible (P8)
       production/work-orders/route.ts                            GET (liste, filtres) (P7)
       production/work-orders/[id]/route.ts                       GET (détail) (P7)
       production/work-orders/[id]/schedule|assign-technician/route.ts       POST (P7)
@@ -150,6 +159,13 @@ src/
       production/work-orders/[id]/photos/route.ts                          POST (multipart) (P7)
       production/work-orders/[id]/workshop-transfer/route.ts               POST — embarquement (P7)
       production/work-orders/[id]/workshop-transfer/receive/route.ts       POST (P7)
+      maintenance-plans/route.ts                                 POST (production) (P8)
+      maintenance-plans/[id]/route.ts                            PATCH (production) (P8)
+      maintenance-reminders/route.ts                             POST (production) (P8)
+      maintenance-reminders/[id]/cancel/route.ts                 POST (production) (P8)
+      maintenance-reminders/[id]/request-appointment/route.ts    POST (client) — crée une ServiceRequest (P8)
+      production/maintenance/route.ts                            GET (?window=today|7d|30d|overdue) (P8)
+      production/maintenance/check-reminders/route.ts            POST — déclenchement manuel (P8)
   proxy.ts                          Garde d'accès (Node.js runtime, Next 16) — rôle sur /production, /technicien, /espace-client (P5)
   lib/
     db.ts                           Client Prisma singleton
@@ -179,6 +195,10 @@ src/
       vehicle-id.ts                 Génération CHC-VH-000001
       vehicle-id.test.ts
       options.ts                    Libellés/valeurs centralisés (carrosserie, carburant, boîte)
+      history.ts                    Agrégation timeline (SR/rapport publié/WorkOrder terminé) (P8)
+      history.test.ts
+      mileage.ts                    MileageReading + garde anti-régression (P8)
+      mileage.test.ts
       test-utils/fake-db.ts         Faux client Prisma minimal pour les tests (voir VEHICLES.md)
     storage/
       provider.ts                   Interface StorageProvider
@@ -223,11 +243,16 @@ src/
       service.test.ts
       options.ts                    Libellés statut/priorité/type/statut pièce
       reference.ts                  Génération CHC-WO-000001 (P7)
+    maintenance/
+      service.ts                    MaintenancePlan/MaintenanceReminder + niveaux + notifications (P8)
+      service.test.ts
+      options.ts                    Libellés type/statut/niveau
   components/
     marketing/site-header.tsx, site-footer.tsx
     auth/logout-button.tsx
     vehicles/
       vehicle-card.tsx, vehicle-form.tsx, vehicle-actions.tsx, vehicle-photo-uploader.tsx
+      vehicle-history-timeline.tsx  Timeline filtrable + pagination (client component) (P8)
     service-requests/
       service-request-wizard.tsx    Assistant 8 étapes (état local, un seul submit)
       service-request-card.tsx
@@ -238,6 +263,7 @@ src/
       report-editor.tsx              Créer/éditer/publier le rapport (P6)
       quote-editor.tsx                Créer un devis, l'envoyer, émettre une v2 (P6)
       work-order-actions.tsx          Planifier/affecter/transitions/contrôle qualité (P7)
+      work-order-item-maintenance-select.tsx  Rattache une ligne à une opération d'entretien (P8)
     technicien/
       intervention-actions.tsx      Je pars/Je suis arrivé/Démarrer le diagnostic (P5)
       diagnostic-checklist.tsx      10 catégories, upsert par ligne (P5)
@@ -246,10 +272,12 @@ src/
       work-order-actions.tsx        Démarrer/pause/pièce manquante/contrôle/travaux suppl. (P7)
     quotes/
       quote-response-actions.tsx    Accepter/Refuser/Demander modification (client) (P6)
+    maintenance/
+      reminder-appointment-button.tsx  "Prendre rendez-vous" → ServiceRequest pré-remplie (P8)
 prisma/
-  schema.prisma                     Modèle de données complet (section 62) + extensions véhicule (P2) + demandes (P3) + sequenceNumber rapport/devis (P6) + Work Order refondu (P7)
-  seed.ts                           Templates de notification (27) + compte admin de test + techniciens démo (P4)
-  migrations/                       20260825001111_initial_schema, 20260825162443_service_requests, 20260826070000_diagnostic_report_quote_sequence (P6), 20260827100000_work_orders_phase7, 20260827100100_work_order_notifications (P7) — aucune nouvelle en P4/P5
+  schema.prisma                     Modèle de données complet (section 62) + extensions véhicule (P2) + demandes (P3) + sequenceNumber rapport/devis (P6) + Work Order refondu (P7) + carnet automobile étendu (P8)
+  seed.ts                           Templates de notification (30) + compte admin de test + techniciens démo (P4)
+  migrations/                       20260825001111_initial_schema, 20260825162443_service_requests, 20260826070000_diagnostic_report_quote_sequence (P6), 20260827100000_work_orders_phase7, 20260827100100_work_order_notifications (P7), 20260830000000_maintenance_type, 20260830000050_reminder_status, 20260830000100_maintenance_notifications (P8) — aucune nouvelle en P4/P5
 vitest.config.mts                   Configuration des tests unitaires (npm test)
 docker-compose.yml                  PostgreSQL local (port 5433) — non utilisé depuis P2.5, Neon en usage réel
 ```

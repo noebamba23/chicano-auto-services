@@ -36,6 +36,9 @@ const TEMPLATES: { event: NotificationEvent; body: string }[] = [
   { event: "QUALITY_CHECK_REQUIRED", body: "CHICANO AUTO SERVICES\nContrôle qualité requis pour l'ordre {{reference}}." },
   { event: "WORK_COMPLETED", body: "CHICANO AUTO SERVICES\nLa réparation de votre véhicule est terminée. Votre véhicule est prêt." },
   { event: "ADDITIONAL_WORK_REQUIRED", body: "CHICANO AUTO SERVICES\nDes travaux supplémentaires ont été identifiés sur l'ordre {{reference}}." },
+  { event: "MAINTENANCE_UPCOMING", body: "CHICANO AUTO SERVICES\nUn entretien approche pour votre véhicule {{vehicle}} : {{maintenanceType}}." },
+  { event: "MAINTENANCE_DUE", body: "CHICANO AUTO SERVICES\nVotre entretien {{maintenanceType}} pour {{vehicle}} arrive à échéance." },
+  { event: "MAINTENANCE_OVERDUE", body: "CHICANO AUTO SERVICES\nVotre entretien {{maintenanceType}} pour {{vehicle}} est en retard." },
 ];
 
 async function main() {

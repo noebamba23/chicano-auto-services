@@ -14,7 +14,7 @@ Ne pas paralléliser les phases : chacune se construit sur la précédente.
 | P5 | Application technicien complète + diagnostic | ✅ Fait — voir `TECHNICIAN-APP.md` |
 | P6 | Rapport + devis | ✅ Fait — voir `REPORTS-QUOTES.md` |
 | P7 | Validation + réparation + clôture | ✅ Fait — voir `WORK-ORDERS.md` |
-| P8 | Historique + rappels | ⏳ À faire |
+| P8 | Historique + rappels | ✅ Fait — voir `MAINTENANCE.md` |
 | P9 | CRM + KPI | ⏳ À faire |
 | P10 | B2B / Fleet | ⏳ À faire |
 
@@ -256,11 +256,48 @@ Facturation, paiement, comptabilité, rapprochement stock réel
 un rôle plutôt qu'à un utilisateur unique — voir `WORK-ORDERS.md` pour le
 détail de chaque limite assumée.
 
+## Détail Phase 8 (livrée)
+
+- Carnet automobile numérique : historique véhicule agrégé à la volée depuis
+  les événements métier existants (`ServiceRequest`/`DiagnosticReport`
+  publié/`WorkOrder` terminé) — aucune table dupliquée, timeline filtrable
+  et paginée sur la fiche véhicule client.
+- Kilométrage : `MileageReading` (Phase 2, jamais exploité) activé — relevé
+  historisé, garde anti-régression (bloquée côté client, corrigeable de
+  façon explicite par la production/le technicien, toujours auditée).
+- `MaintenancePlan`/`MaintenanceReminder` (Phase 0, jamais exploités)
+  étendus : `MaintenanceType` élargi à 16 opérations, `ReminderStatus`
+  aligné (PENDING/SCHEDULED/SENT/COMPLETED/CANCELLED), plan par véhicule
+  (jamais de liste universelle imposée).
+- Niveaux d'alerte progressifs (UPCOMING/DUE/OVERDUE) calculés à la volée,
+  déclenchement par date OU kilométrage (le plus urgent gagne), anti-spam
+  (jamais deux fois la même alerte).
+- Un entretien n'est réalisé que via un `WorkOrder` réellement terminé
+  (jamais déclaré par le client) — clôture du rappel + calcul automatique
+  de la prochaine échéance.
+- "Prendre rendez-vous" depuis un rappel réutilise `createServiceRequest()`
+  existant — jamais un `Appointment` confirmé créé directement.
+- Interfaces client (fiche véhicule, dashboard), production (Control Center
+  "Maintenance", nouvelle fiche véhicule production) et technicien (relevé
+  kilométrique).
+- 42 nouveaux tests unitaires (209 au total) + vérification réelle Neon +
+  navigateur (client, production, workflow rappel → demande de service
+  bout en bout).
+- Documentation complète : `docs/MAINTENANCE.md`.
+
+## Non couvert par la Phase 8 (volontairement)
+
+Automatisation réelle des rappels (aucun scheduler/cron dans ce projet —
+déclenchement manuel), génération automatique d'un plan depuis marque/
+modèle (aucune source constructeur vérifiée), système EV/Hybride
+spécialisé, diffusion de notification à un rôle — voir `MAINTENANCE.md`
+pour le détail de chaque limite assumée.
+
 ## PostgreSQL
 
 Résolu en Phase 2.5 : Docker Desktop restait bloqué sur cette machine (jamais
 dépassé son initialisation depuis l'installation) — contournement définitif via
 **Neon** (PostgreSQL cloud), `DATABASE_URL` pointant vers un projet Neon réel depuis
-lors. Toutes les migrations (P2.5, P3, P6, P7 — aucune nouvelle migration en
+lors. Toutes les migrations (P2.5, P3, P6, P7, P8 — aucune nouvelle migration en
 P4/P5, le schéma existant suffisait) ont été appliquées et validées contre
 cette base réelle, pas contre un mock.

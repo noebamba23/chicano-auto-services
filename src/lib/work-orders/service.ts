@@ -2,7 +2,8 @@ import { db } from "@/lib/db";
 import { randomUUID } from "crypto";
 import { formatWorkOrderReference } from "./reference";
 import { sendNotification } from "@/lib/notifications/service";
-import type { Prisma, WorkOrderStatus, WorkOrderPartStatus, WorkOrderPhotoPhase } from "@prisma/client";
+import { completeMaintenanceFromWorkOrder } from "@/lib/maintenance/service";
+import type { Prisma, WorkOrderStatus, WorkOrderPartStatus, WorkOrderPhotoPhase, MaintenanceType } from "@prisma/client";
 
 // Work Order (Phase 7) — "DEVIS ACCEPTÉ → WORK ORDER → PLANIFICATION →
 // AFFECTATION → EXÉCUTION → PIÈCES → MAIN-D'ŒUVRE → CONTRÔLE QUALITÉ →
@@ -348,6 +349,11 @@ export async function passQualityCheck(
   const customer = await db.customer.findUnique({ where: { id: wo.customerId }, select: { userId: true } });
   if (customer) await sendNotification(customer.userId, "WORK_COMPLETED", { reference: wo.workOrderNumber });
 
+  // Carnet automobile (Phase 8) — un entretien n'est jamais réalisé sans
+  // intervention réellement terminée : c'est ici, et nulle part ailleurs,
+  // que les rappels liés sont clos et la prochaine échéance calculée.
+  await completeMaintenanceFromWorkOrder(id);
+
   return getWorkOrderForProduction(id);
 }
 
@@ -451,7 +457,15 @@ export async function updateWorkOrderPartStatus(workOrderId: string, partId: str
 export async function updateWorkOrderItem(
   workOrderId: string,
   itemId: string,
-  input: { status?: "PENDING" | "DONE"; actualMinutes?: number; technicianId?: string }
+  input: {
+    status?: "PENDING" | "DONE";
+    actualMinutes?: number;
+    technicianId?: string;
+    // Phase 8 — rattache cette ligne au carnet d'entretien (voir
+    // src/lib/maintenance/service.ts::completeMaintenanceFromWorkOrder,
+    // déclenché uniquement quand ce Work Order passe à COMPLETED).
+    maintenanceType?: MaintenanceType | null;
+  }
 ) {
   const wo = await getWorkOrderForProduction(workOrderId);
   const target = wo.items.find((i) => i.id === itemId);
@@ -463,6 +477,7 @@ export async function updateWorkOrderItem(
       status: input.status,
       actualMinutes: input.actualMinutes,
       technicianId: input.technicianId,
+      maintenanceType: input.maintenanceType,
     },
   });
 

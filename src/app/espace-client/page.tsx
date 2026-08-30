@@ -3,6 +3,9 @@ import { getSession } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { getCustomerIdForUser, listVehiclesForCustomer } from "@/lib/vehicles/service";
 import { VehicleCard } from "@/components/vehicles/vehicle-card";
+import { getVehicleMaintenanceForCustomer } from "@/lib/maintenance/service";
+import { maintenanceTypeLabel } from "@/lib/maintenance/options";
+import { formatPlateNumber } from "@/lib/vehicles/registration/plate";
 
 const ACTIONS = [
   { emoji: "🔧", label: "Demander un service", href: "/espace-client/demande-service", available: true },
@@ -23,6 +26,8 @@ export default async function ClientDashboardPage() {
   const customerId = session ? await getCustomerIdForUser(session.sub) : null;
   const vehicles = customerId ? await listVehiclesForCustomer(customerId) : [];
   const primary = vehicles.find((v) => v.isPrimary);
+  const maintenance = customerId && primary ? await getVehicleMaintenanceForCustomer(customerId, primary.id) : null;
+  const nextReminder = maintenance?.reminders[0] ?? null;
 
   return (
     <div>
@@ -60,6 +65,33 @@ export default async function ClientDashboardPage() {
           </div>
         )}
       </section>
+
+      {primary && (
+        <section className="mt-8 rounded-lg border border-chicano-gray-light bg-white p-6">
+          <p className="text-sm font-semibold text-chicano-black">Entretien &amp; rappels</p>
+          <p className="mt-2 text-sm text-chicano-gray">
+            {primary.make} {primary.model}
+            {primary.licensePlate ? ` — ${formatPlateNumber(primary.licensePlate)}` : ""}
+          </p>
+          {primary.mileage !== null && (
+            <p className="mt-1 text-lg font-bold text-chicano-black">{primary.mileage.toLocaleString("fr-FR")} km</p>
+          )}
+          {nextReminder ? (
+            <div className="mt-3 flex items-center justify-between">
+              <p className="text-sm text-chicano-black">
+                Prochain entretien : <span className="font-semibold">{maintenanceTypeLabel(nextReminder.type)}</span>
+                {nextReminder.dueMileage ? ` dans ${Math.max(0, nextReminder.dueMileage - (primary.mileage ?? 0)).toLocaleString("fr-FR")} km` : ""}
+                {nextReminder.dueAt ? ` (${new Date(nextReminder.dueAt).toLocaleDateString("fr-FR")})` : ""}
+              </p>
+              <Link href={`/espace-client/vehicules/${primary.id}`} className="text-sm font-medium text-chicano-red">
+                Voir
+              </Link>
+            </div>
+          ) : (
+            <p className="mt-3 text-sm text-chicano-gray">🟢 Entretien à jour</p>
+          )}
+        </section>
+      )}
 
       <section className="mt-8 grid grid-cols-2 gap-4 sm:grid-cols-3">
         {ACTIONS.map((action) =>

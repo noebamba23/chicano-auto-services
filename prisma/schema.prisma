@@ -864,6 +864,10 @@ model WorkOrderItem {
   estimatedMinutes  Int?
   actualMinutes     Int?
   technicianId      String?
+  // Phase 8 — rattache cette ligne à une opération du carnet d'entretien
+  // (voir MaintenanceType). Optionnel : la plupart des lignes de réparation
+  // ne correspondent à aucun entretien planifié.
+  maintenanceType   MaintenanceType?
   createdAt         DateTime @default(now())
 
   workOrder         WorkOrder @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
@@ -1043,14 +1047,29 @@ model Payment {
 // CARNET NUMÉRIQUE / RAPPELS
 // ============================================================
 
+// Carnet automobile (Phase 8) — étendu depuis le placeholder posé en Phase 0
+// (confirmé vide sur Neon avant modification). Volontairement pas une liste
+// universelle imposée : chaque MaintenancePlan reste rattaché à UN véhicule,
+// créé manuellement par la production (aucune génération automatique depuis
+// marque/modèle — aucune source constructeur vérifiée disponible, voir
+// docs/MAINTENANCE.md).
 enum MaintenanceType {
   OIL_CHANGE
-  FILTERS
+  OIL_FILTER
+  AIR_FILTER
+  FUEL_FILTER
   BRAKES
+  BRAKE_FLUID
+  TIRES
   BATTERY
+  AIR_CONDITIONING
   TIMING_BELT
+  SPARK_PLUGS
+  TRANSMISSION
+  COOLANT
   TECHNICAL_INSPECTION
   PERIODIC_SERVICE
+  OTHER
 }
 
 model MaintenancePlan {
@@ -1059,33 +1078,67 @@ model MaintenancePlan {
   type            MaintenanceType
   intervalKm      Int?
   intervalMonths  Int?
+  priority        WorkOrderPriority @default(NORMAL)
+  isActive        Boolean  @default(true)
   lastDoneAt      DateTime?
   lastDoneMileage Int?
   createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
   vehicle         Vehicle  @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
   reminders       MaintenanceReminder[]
+
+  @@index([vehicleId])
 }
 
+// PENDING/SCHEDULED se recouvrent volontairement (un rappel créé
+// automatiquement depuis un plan démarre SCHEDULED ; PENDING reste
+// disponible pour un rappel créé manuellement sans échéance encore fixée) —
+// voir docs/MAINTENANCE.md.
 enum ReminderStatus {
+  PENDING
   SCHEDULED
-  NOTIFIED
-  DONE
-  DISMISSED
+  SENT
+  COMPLETED
+  CANCELLED
+}
+
+// Niveau d'alerte progressif (section "RAPPELS PROGRESSIFS") — calculé à la
+// volée depuis dueAt/dueMileage, jamais stocké comme source de vérité ;
+// lastNotifiedLevel sert uniquement à ne jamais renvoyer deux fois la même
+// alerte (anti-spam).
+enum MaintenanceReminderLevel {
+  UPCOMING
+  DUE
+  OVERDUE
 }
 
 model MaintenanceReminder {
-  id              String   @id @default(cuid())
-  vehicleId       String
-  planId          String?
-  type            MaintenanceType
-  dueAt           DateTime?
-  dueMileage      Int?
-  status          ReminderStatus @default(SCHEDULED)
-  createdAt       DateTime @default(now())
+  id                 String   @id @default(cuid())
+  vehicleId          String
+  planId             String?
+  type               MaintenanceType
+  dueAt              DateTime?
+  dueMileage         Int?
+  priority           WorkOrderPriority @default(NORMAL)
+  status             ReminderStatus @default(SCHEDULED)
+  notes              String?
+  lastNotifiedLevel  MaintenanceReminderLevel?
+  lastNotifiedAt     DateTime?
+  // Traçabilité "entretien réalisé" (section 17) — un client ne peut jamais
+  // déclarer lui-même un rappel complété, seul un WorkOrder COMPLETED le
+  // peut (voir work-orders/service.ts::passQualityCheck).
+  completedByWorkOrderId String?
+  completedAt        DateTime?
+  cancelledAt        DateTime?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
-  vehicle         Vehicle  @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
-  plan            MaintenancePlan? @relation(fields: [planId], references: [id])
+  vehicle            Vehicle  @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  plan               MaintenancePlan? @relation(fields: [planId], references: [id])
+
+  @@index([vehicleId])
+  @@index([status])
 }
 
 // ============================================================
@@ -1131,6 +1184,15 @@ enum NotificationEvent {
   QUALITY_CHECK_REQUIRED
   WORK_COMPLETED
   ADDITIONAL_WORK_REQUIRED
+  // Carnet automobile (Phase 8) — remplacent en pratique l'ancien
+  // MAINTENANCE_REMINDER générique (conservé pour ne pas casser son
+  // template déjà seedé, mais plus utilisé par le nouveau code). REPAIR_
+  // COMPLETED/VEHICLE_READY (déjà posés en Phase 0) sont réutilisés tels
+  // quels pour signaler un entretien terminé — pas de nouvel événement
+  // SERVICE_COMPLETED, voir docs/MAINTENANCE.md.
+  MAINTENANCE_UPCOMING
+  MAINTENANCE_DUE
+  MAINTENANCE_OVERDUE
 }
 
 enum NotificationStatus {

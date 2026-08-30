@@ -6,6 +6,10 @@ import { bodyTypeLabel, fuelTypeLabel, transmissionLabel } from "@/lib/vehicles/
 import { formatPlateNumber } from "@/lib/vehicles/registration/plate";
 import { VehicleActions } from "@/components/vehicles/vehicle-actions";
 import { VehiclePhotoUploader } from "@/components/vehicles/vehicle-photo-uploader";
+import { VehicleHistoryTimeline } from "@/components/vehicles/vehicle-history-timeline";
+import { getVehicleMaintenanceForCustomer } from "@/lib/maintenance/service";
+import { maintenanceTypeLabel, reminderLevelLabel } from "@/lib/maintenance/options";
+import { ReminderAppointmentButton } from "@/components/maintenance/reminder-appointment-button";
 
 export default async function VehicleDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -22,6 +26,9 @@ export default async function VehicleDetailPage({ params }: { params: Promise<{ 
     if (err instanceof VehicleNotFoundError) notFound();
     throw err;
   }
+
+  const { reminders } = await getVehicleMaintenanceForCustomer(customerId, id);
+  const nextReminder = reminders[0] ?? null;
 
   const metaLine = [vehicle.year, fuelTypeLabel(vehicle.fuelType), transmissionLabel(vehicle.transmission)]
     .filter(Boolean)
@@ -111,11 +118,46 @@ export default async function VehicleDetailPage({ params }: { params: Promise<{ 
       </section>
 
       <section className="mt-8">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-chicano-gray">Historique</h2>
-        <div className="mt-4 rounded-lg border border-dashed border-chicano-gray-light bg-white p-8 text-center">
-          <p className="text-sm text-chicano-gray">
-            Votre historique CHICANO apparaîtra ici après votre première intervention.
-          </p>
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-chicano-gray">Entretien du véhicule</h2>
+        {nextReminder ? (
+          <div className="mt-4 rounded-lg border border-chicano-gray-light bg-white p-6">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs text-chicano-gray">Prochain entretien</p>
+                <p className="mt-1 text-lg font-bold text-chicano-black">{maintenanceTypeLabel(nextReminder.type)}</p>
+                <p className="mt-1 text-sm text-chicano-gray">
+                  {nextReminder.dueMileage ? `${nextReminder.dueMileage.toLocaleString("fr-FR")} km` : ""}
+                  {nextReminder.dueMileage && nextReminder.dueAt ? " ou " : ""}
+                  {nextReminder.dueAt ? new Date(nextReminder.dueAt).toLocaleDateString("fr-FR") : ""}
+                </p>
+              </div>
+              <span
+                className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                  nextReminder.level === "OVERDUE"
+                    ? "bg-red-100 text-red-700"
+                    : nextReminder.level === "DUE"
+                      ? "bg-amber-100 text-amber-700"
+                      : "bg-chicano-gray-light text-chicano-black"
+                }`}
+              >
+                {nextReminder.level ? reminderLevelLabel(nextReminder.level) : "À jour"}
+              </span>
+            </div>
+            <div className="mt-4">
+              <ReminderAppointmentButton reminderId={nextReminder.id} />
+            </div>
+          </div>
+        ) : (
+          <div className="mt-4 rounded-lg border border-chicano-gray-light bg-white p-6 text-center">
+            <p className="text-sm text-chicano-gray">🟢 Aucun entretien à prévoir pour le moment.</p>
+          </div>
+        )}
+      </section>
+
+      <section className="mt-8">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-chicano-gray">Historique du véhicule</h2>
+        <div className="mt-4">
+          <VehicleHistoryTimeline vehicleId={vehicle.id} />
         </div>
       </section>
     </div>

@@ -29,6 +29,12 @@ function matches(row: Row, where: Record<string, unknown>): boolean {
       if (!(condition as { in: unknown[] }).in.includes(row[key])) return false;
       continue;
     }
+    // { status: { notIn: ["A", "B"] } } — ajouté en Phase 8 pour
+    // history.ts (exclut les ServiceRequest DRAFT/CANCELLED de la timeline).
+    if (condition !== null && typeof condition === "object" && "notIn" in condition) {
+      if ((condition as { notIn: unknown[] }).notIn.includes(row[key])) return false;
+      continue;
+    }
     if (row[key] !== condition) return false;
   }
   return true;
@@ -71,6 +77,9 @@ export function createFakeDb() {
   let workOrderParts: Row[] = [];
   let workOrderPhotos: Row[] = [];
   let workshopTransfers: Row[] = [];
+  let maintenancePlans: Row[] = [];
+  let maintenanceReminders: Row[] = [];
+  let mileageReadings: Row[] = [];
   let nextSrSequence = 1;
   let nextReportSequence = 1;
   let nextQuoteSequence = 1;
@@ -158,13 +167,20 @@ export function createFakeDb() {
   // listPublishedReportsForCustomer()/getPublishedReportForCustomer().
   function matchesReportWhere(row: Row, where: Record<string, unknown>): boolean {
     const { diagnostic: diagnosticWhere, ...flat } = where as {
-      diagnostic?: { vehicle?: { customerId?: string } };
+      diagnostic?: { vehicle?: { customerId?: string }; vehicleId?: string };
     } & Record<string, unknown>;
     if (!matches(row, flat)) return false;
     if (diagnosticWhere?.vehicle?.customerId !== undefined) {
       const diag = diagnostics.find((d) => d.id === row.diagnosticId);
       const veh = diag ? vehicles.find((v) => v.id === diag.vehicleId) : null;
       if (!veh || veh.customerId !== diagnosticWhere.vehicle.customerId) return false;
+    }
+    // Phase 8 — src/lib/vehicles/history.ts interroge diagnostic.vehicleId
+    // directement (pas via vehicle.customerId, l'ownership est déjà vérifiée
+    // en amont par getVehicleForCustomer côté appelant).
+    if (diagnosticWhere?.vehicleId !== undefined) {
+      const diag = diagnostics.find((d) => d.id === row.diagnosticId);
+      if (!diag || diag.vehicleId !== diagnosticWhere.vehicleId) return false;
     }
     return true;
   }
@@ -244,6 +260,17 @@ export function createFakeDb() {
       { get: () => vehicles, set: (r) => (vehicles = r) },
       { status: "ACTIVE" }
     ),
+    // where.maintenancePlans.none: {} — Phase 8, "véhicules sans plan"
+    // (listMaintenanceOverviewForProduction) : hors de portée de matches()
+    // générique, géré ici spécifiquement.
+    async findMany({ where, orderBy, take }: { where: Record<string, unknown>; orderBy?: unknown; take?: number }) {
+      const { maintenancePlans: plansWhere, ...flat } = where as { maintenancePlans?: { none?: unknown } } & Record<string, unknown>;
+      let rows = applyOrder(vehicles.filter((r) => matches(r, flat)), orderBy);
+      if (plansWhere?.none !== undefined) {
+        rows = rows.filter((v) => !maintenancePlans.some((p) => p.vehicleId === v.id));
+      }
+      return take ? rows.slice(0, take) : rows;
+    },
   };
 
   const customerModel = genericModel({ get: () => customers, set: (r) => (customers = r) }, {});
@@ -671,6 +698,7 @@ export function createFakeDb() {
         estimatedMinutes: null,
         actualMinutes: null,
         technicianId: null,
+        maintenanceType: null,
         ...data,
       } as Row;
       workOrderItems.push(row);
@@ -738,6 +766,113 @@ export function createFakeDb() {
     },
   };
 
+  // Phase 8 — carnet automobile. matches() générique suffit (pas de champ
+  // imbriqué requis dans les where des services maintenance).
+  const maintenancePlanModel = {
+    async create({ data }: { data: Record<string, unknown> }) {
+      const row: Row = {
+        id: randomUUID(),
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        intervalKm: null,
+        intervalMonths: null,
+        priority: "NORMAL",
+        isActive: true,
+        lastDoneAt: null,
+        lastDoneMileage: null,
+        ...data,
+      } as Row;
+      maintenancePlans.push(row);
+      return row;
+    },
+    async update({ where, data }: { where: { id: string }; data: Record<string, unknown> }) {
+      const row = maintenancePlans.find((r) => r.id === where.id);
+      if (!row) throw new Error("Record to update not found.");
+      Object.assign(row, data, { updatedAt: new Date() });
+      return row;
+    },
+    async findUnique({ where }: { where: Record<string, unknown> }) {
+      return maintenancePlans.find((r) => matches(r, where)) ?? null;
+    },
+    async findFirst({ where, orderBy }: { where: Record<string, unknown>; orderBy?: unknown }) {
+      const rows = applyOrder(maintenancePlans.filter((r) => matches(r, where)), orderBy);
+      return rows[0] ?? null;
+    },
+    async findMany({ where, orderBy }: { where: Record<string, unknown>; orderBy?: unknown }) {
+      return applyOrder(maintenancePlans.filter((r) => matches(r, where)), orderBy);
+    },
+  };
+
+  const maintenanceReminderModel = {
+    async create({ data }: { data: Record<string, unknown> }) {
+      const row: Row = {
+        id: randomUUID(),
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        planId: null,
+        dueAt: null,
+        dueMileage: null,
+        priority: "NORMAL",
+        status: "SCHEDULED",
+        notes: null,
+        lastNotifiedLevel: null,
+        lastNotifiedAt: null,
+        completedByWorkOrderId: null,
+        completedAt: null,
+        cancelledAt: null,
+        ...data,
+      } as Row;
+      maintenanceReminders.push(row);
+      return row;
+    },
+    async update({ where, data }: { where: { id: string }; data: Record<string, unknown> }) {
+      const row = maintenanceReminders.find((r) => r.id === where.id);
+      if (!row) throw new Error("Record to update not found.");
+      Object.assign(row, data, { updatedAt: new Date() });
+      return row;
+    },
+    async updateMany({ where, data }: { where: Record<string, unknown>; data: Record<string, unknown> }) {
+      const rows = maintenanceReminders.filter((r) => matches(r, where));
+      for (const row of rows) Object.assign(row, data, { updatedAt: new Date() });
+      return { count: rows.length };
+    },
+    async findUnique({ where }: { where: Record<string, unknown> }) {
+      return maintenanceReminders.find((r) => matches(r, where)) ?? null;
+    },
+    // where.vehicle.customerId (ownership) — même limite que matchesQuoteWhere.
+    async findFirst({ where, orderBy }: { where: Record<string, unknown>; orderBy?: unknown }) {
+      const { vehicle: vehicleWhere, ...flat } = where as { vehicle?: { customerId?: string } } & Record<string, unknown>;
+      const rows = applyOrder(
+        maintenanceReminders.filter((r) => {
+          if (!matches(r, flat)) return false;
+          if (vehicleWhere?.customerId !== undefined) {
+            const veh = vehicles.find((v) => v.id === r.vehicleId);
+            if (!veh || veh.customerId !== vehicleWhere.customerId) return false;
+          }
+          return true;
+        }),
+        orderBy
+      );
+      return rows[0] ?? null;
+    },
+    async findMany({ where, orderBy, include }: { where: Record<string, unknown>; orderBy?: unknown; include?: unknown }) {
+      const rows = applyOrder(maintenanceReminders.filter((r) => matches(r, where)), orderBy);
+      if (!include) return rows;
+      return rows.map((r) => ({ ...r, vehicle: vehicles.find((v) => v.id === r.vehicleId) ?? null }));
+    },
+  };
+
+  const mileageReadingModel = {
+    async create({ data }: { data: Record<string, unknown> }) {
+      const row: Row = { id: randomUUID(), recordedAt: new Date(), source: "CUSTOMER", notes: null, ...data } as Row;
+      mileageReadings.push(row);
+      return row;
+    },
+    async findMany({ where, orderBy }: { where: Record<string, unknown>; orderBy?: unknown }) {
+      return applyOrder(mileageReadings.filter((r) => matches(r, where)), orderBy);
+    },
+  };
+
   const fakeDb = {
     vehicle: vehicleModel,
     customer: customerModel,
@@ -761,6 +896,9 @@ export function createFakeDb() {
     workOrderPart: workOrderPartModel,
     workOrderPhoto: workOrderPhotoModel,
     workshopTransfer: workshopTransferModel,
+    maintenancePlan: maintenancePlanModel,
+    maintenanceReminder: maintenanceReminderModel,
+    mileageReading: mileageReadingModel,
     async $transaction(fnOrArray: unknown) {
       if (typeof fnOrArray === "function") {
         return (fnOrArray as (tx: typeof fakeDb) => unknown)(fakeDb);
@@ -812,6 +950,9 @@ export function createFakeDb() {
       workOrderParts = [];
       workOrderPhotos = [];
       workshopTransfers = [];
+      maintenancePlans = [];
+      maintenanceReminders = [];
+      mileageReadings = [];
       nextSrSequence = 1;
       nextReportSequence = 1;
       nextQuoteSequence = 1;

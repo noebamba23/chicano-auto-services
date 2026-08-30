@@ -11,6 +11,7 @@ const NAV_LINKS = [
   { href: "/production/kanban", label: "Kanban" },
   { href: "/production/calendrier", label: "Calendrier" },
   { href: "/production/work-orders", label: "Work Orders" },
+  { href: "/production/maintenance", label: "Maintenance" },
   { href: "/production/techniciens", label: "Techniciens" },
 ];
 
