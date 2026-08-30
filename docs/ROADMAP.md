@@ -13,7 +13,7 @@ Ne pas paralléliser les phases : chacune se construit sur la précédente.
 | P4 | Production (suite) + Kanban + calendrier + affectation technicien basique | ✅ Fait — voir `SERVICE-REQUESTS.md` (section Phase 4) |
 | P5 | Application technicien complète + diagnostic | ✅ Fait — voir `TECHNICIAN-APP.md` |
 | P6 | Rapport + devis | ✅ Fait — voir `REPORTS-QUOTES.md` |
-| P7 | Validation + réparation + clôture | ⏳ À faire |
+| P7 | Validation + réparation + clôture | ✅ Fait — voir `WORK-ORDERS.md` |
 | P8 | Historique + rappels | ⏳ À faire |
 | P9 | CRM + KPI | ⏳ À faire |
 | P10 | B2B / Fleet | ⏳ À faire |
@@ -217,11 +217,50 @@ d'entretien, expiration automatique des devis, affichage du motif de refus/
 de la note de modification côté UI production (journalisé mais pas encore
 affiché) — voir `REPORTS-QUOTES.md` pour le détail de chaque limite assumée.
 
+## Détail Phase 7 (livrée)
+
+- Work Order (`WorkOrder`/`WorkOrderItem`/`WorkOrderPart`/`WorkOrderPhoto`) :
+  créé automatiquement à l'acceptation d'un devis (`acceptQuote()`), jamais
+  via une route manuelle. Récupère automatiquement client/véhicule/
+  ServiceRequest/rendez-vous/technicien déjà affecté/rapport de
+  diagnostic/lignes du devis accepté.
+- Refonte du placeholder `WorkOrder`/`WorkOrderTask` posé en Phase 0
+  (confirmé vide sur Neon avant modification, aucune perte de donnée) ;
+  `WorkshopTransfer` conservé pour l'embarquement garage (intervention
+  mobile impossible sur place).
+- Cycle de statuts complet (`DRAFT → READY → SCHEDULED → IN_PROGRESS →
+  QUALITY_CHECK → COMPLETED`, branches `WAITING_PARTS`/`ON_HOLD`,
+  `CANCELLED`), transitions validées uniquement côté serveur — même
+  discipline que `ServiceRequestStatus`.
+- Contrôle qualité obligatoire avant `COMPLETED` (`qualityCheckPassed/
+  Notes/CheckedById/CheckedAt`, essai véhicule).
+- Pièces (statuts REQUESTED → RECEIVED → INSTALLED, volontairement pas un
+  ERP de stock) et travaux (repris du devis accepté, jamais modifiables
+  librement par un technicien).
+- Travaux supplémentaires : signal léger (`additionalWorkRequested`) sans
+  jamais modifier le devis accepté.
+- Interfaces production (`/production/work-orders`), client
+  (`/espace-client/reparations`) et technicien (`/technicien/reparations`).
+- 7 nouveaux événements `NotificationEvent` (2 non diffusés, signaux
+  internes production sans mécanisme de diffusion à un rôle dans ce
+  projet).
+- 22 nouveaux tests unitaires (167 au total) + vérification réelle Neon +
+  navigateur (production/client/technicien, une transition de statut
+  réelle bout en bout).
+- Documentation complète : `docs/WORK-ORDERS.md`.
+
+## Non couvert par la Phase 7 (volontairement)
+
+Facturation, paiement, comptabilité, rapprochement stock réel
+(`Inventory`), système de remorquage complet, diffusion de notification à
+un rôle plutôt qu'à un utilisateur unique — voir `WORK-ORDERS.md` pour le
+détail de chaque limite assumée.
+
 ## PostgreSQL
 
 Résolu en Phase 2.5 : Docker Desktop restait bloqué sur cette machine (jamais
 dépassé son initialisation depuis l'installation) — contournement définitif via
 **Neon** (PostgreSQL cloud), `DATABASE_URL` pointant vers un projet Neon réel depuis
-lors. Toutes les migrations (P2.5, P3, P6 — aucune nouvelle migration en
+lors. Toutes les migrations (P2.5, P3, P6, P7 — aucune nouvelle migration en
 P4/P5, le schéma existant suffisait) ont été appliquées et validées contre
 cette base réelle, pas contre un mock.

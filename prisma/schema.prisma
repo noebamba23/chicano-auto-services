@@ -117,6 +117,7 @@ model Customer {
   quotesAccepted Quote[] @relation("QuoteAcceptedBy")
   invoices      Invoice[]
   leads         Lead[]
+  workOrders    WorkOrder[]
 }
 
 enum CrmStage {
@@ -175,6 +176,8 @@ model Technician {
   user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   assignments   TechnicianAssignment[]
   diagnostics   Diagnostic[]
+  workOrders    WorkOrder[]
+  workOrderItems WorkOrderItem[]
 }
 
 // ============================================================
@@ -434,6 +437,7 @@ model ServiceRequest {
   attachments       ServiceRequestAttachment[]
   location          RequestLocation?
   appointment       Appointment?
+  workOrders        WorkOrder[]
 
   @@index([customerId])
   @@index([vehicleId])
@@ -511,6 +515,7 @@ model Appointment {
   location          AppointmentLocation?
   assignments       TechnicianAssignment[]
   diagnostics       Diagnostic[]
+  workOrders        WorkOrder[]
 
   @@index([status])
   @@index([scheduledDate])
@@ -659,6 +664,7 @@ model DiagnosticReport {
 
   diagnostic     Diagnostic @relation(fields: [diagnosticId], references: [id], onDelete: Cascade)
   photos         ReportPhoto[]
+  workOrders     WorkOrder[]
 }
 
 model ReportPhoto {
@@ -735,53 +741,193 @@ model QuoteItem {
 
   quoteVersion    QuoteVersion @relation(fields: [quoteVersionId], references: [id], onDelete: Cascade)
   part            Part?    @relation(fields: [partId], references: [id])
+  workOrderItems  WorkOrderItem[]
 }
 
+// Work Order (Phase 7) — remplace le placeholder posé en Phase 0 (jamais
+// exploité, confirmé vide sur Neon avant cette migration : voir
+// docs/WORK-ORDERS.md). Créé automatiquement par acceptQuote() (jamais par
+// une route de création manuelle) — voir la règle "QUOTE ACCEPTED →
+// WORK ORDER CREATED" de docs/WORK-ORDERS.md.
 enum WorkOrderStatus {
-  APPROVED_FOR_REPAIR
-  IN_PROGRESS
-  TRANSFER_TO_WORKSHOP
-  RECEIVED_AT_WORKSHOP
-  QUALITY_CONTROL
+  DRAFT
   READY
-  DELIVERED
+  SCHEDULED
+  IN_PROGRESS
+  WAITING_PARTS
+  QUALITY_CHECK
+  COMPLETED
   CANCELLED
+  ON_HOLD
+}
+
+enum WorkOrderPriority {
+  NORMAL
+  URGENT
 }
 
 model WorkOrder {
   id              String   @id @default(cuid())
-  workOrderNumber String   @unique
-  quoteId         String   @unique
+  // Même principe que les autres références métier (Vehicle.sequenceNumber
+  // etc.) — jamais la clé primaire.
+  sequenceNumber  Int      @unique @default(autoincrement())
+  workOrderNumber String   @unique // CHC-WO-000001
+  customerId      String
   vehicleId       String
-  status          WorkOrderStatus @default(APPROVED_FOR_REPAIR)
+  serviceRequestId String
+  appointmentId   String?
+  // Un seul Work Order par devis accepté — Quote.status = ACCEPTED est un
+  // état terminal (aucun chemin de code ne permet d'en sortir), donc cette
+  // contrainte d'unicité suffit à empêcher un doublon.
+  quoteId         String   @unique
+  // Figé à la création depuis Quote.currentVersion — jamais recalculé même
+  // si le cycle de vie du devis évoluait un jour après ACCEPTED (voir
+  // docs/WORK-ORDERS.md, section "Version du devis").
+  acceptedQuoteVersionNumber Int
+  diagnosticReportId String?
+  technicianId    String?
+  status          WorkOrderStatus @default(DRAFT)
+  priority        WorkOrderPriority @default(NORMAL)
+  scheduledDate   DateTime?
+  internalNotes   String?
+  // Contrôle qualité obligatoire avant COMPLETED (voir assertTransition côté
+  // service — jamais appliqué au niveau du schéma).
+  qualityCheckPassed   Boolean?
+  qualityCheckNotes    String?
+  qualityCheckedById   String?
+  qualityCheckedAt     DateTime?
+  testDrivePerformed   Boolean  @default(false)
+  testDriveNotes       String?
+  // Travaux supplémentaires découverts en cours de réparation — signal léger
+  // uniquement (jamais de modification silencieuse du devis accepté, voir
+  // docs/WORK-ORDERS.md).
+  additionalWorkRequested Boolean @default(false)
+  additionalWorkNotes     String?
+  // Intervention mobile où la réparation s'avère impossible sur place — la
+  // trace réelle de l'embarquement reste WorkshopTransfer ; ce flag signale
+  // juste que la situation a été rencontrée.
+  requiresTowing  Boolean  @default(false)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  quote           Quote    @relation(fields: [quoteId], references: [id])
+  customer        Customer @relation(fields: [customerId], references: [id])
   vehicle         Vehicle  @relation(fields: [vehicleId], references: [id])
-  tasks           WorkOrderTask[]
+  serviceRequest  ServiceRequest @relation(fields: [serviceRequestId], references: [id])
+  appointment     Appointment? @relation(fields: [appointmentId], references: [id])
+  quote           Quote    @relation(fields: [quoteId], references: [id])
+  diagnosticReport DiagnosticReport? @relation(fields: [diagnosticReportId], references: [id])
+  technician      Technician? @relation(fields: [technicianId], references: [id])
+
+  items           WorkOrderItem[]
+  parts           WorkOrderPart[]
+  photos          WorkOrderPhoto[]
   transfer        WorkshopTransfer?
   invoice         Invoice?
+
+  @@index([customerId])
+  @@index([vehicleId])
+  @@index([serviceRequestId])
+  @@index([appointmentId])
+  @@index([technicianId])
+  @@index([status])
+  @@index([createdAt])
 }
 
-enum WorkOrderTaskStatus {
+enum WorkOrderItemType {
+  LABOR
+  PART
+  SERVICE
+  OTHER
+}
+
+enum WorkOrderItemStatus {
   PENDING
-  IN_PROGRESS
   DONE
 }
 
-model WorkOrderTask {
-  id              String   @id @default(cuid())
-  workOrderId     String
-  label           String
-  status          WorkOrderTaskStatus @default(PENDING)
-  notes           String?
-  photoUrls       String[]
-  minutesSpent    Int?
+// Ligne de travaux — les lignes approuvées proviennent du devis accepté
+// (sourceQuoteItemId), jamais saisies librement par un technicien (voir
+// règle "ne pas permettre à un technicien de modifier silencieusement le
+// périmètre financier approuvé").
+model WorkOrderItem {
+  id                String   @id @default(cuid())
+  workOrderId       String
+  type              WorkOrderItemType
+  description       String
+  quantity          Decimal  @default(1) @db.Decimal(10, 2)
+  unit              String?
+  unitPrice         Decimal? @db.Decimal(12, 2)
+  totalPrice        Decimal? @db.Decimal(12, 2)
+  sourceQuoteItemId String?
+  status            WorkOrderItemStatus @default(PENDING)
+  // Main-d'œuvre (type = LABOR) : suivi durée estimée/réelle par technicien.
+  estimatedMinutes  Int?
+  actualMinutes     Int?
+  technicianId      String?
+  createdAt         DateTime @default(now())
 
-  workOrder       WorkOrder @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  workOrder         WorkOrder @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  sourceQuoteItem   QuoteItem? @relation(fields: [sourceQuoteItemId], references: [id])
+  technician        Technician? @relation(fields: [technicianId], references: [id])
+
+  @@index([workOrderId])
 }
 
+enum WorkOrderPartStatus {
+  REQUESTED
+  AVAILABLE
+  ORDERED
+  RECEIVED
+  INSTALLED
+  NOT_REQUIRED
+}
+
+// Gestion opérationnelle des pièces nécessaires à UN Work Order — volontairement
+// pas un ERP de stock (pas de rapprochement avec Inventory.quantity dans cette
+// phase, voir docs/WORK-ORDERS.md).
+model WorkOrderPart {
+  id            String   @id @default(cuid())
+  workOrderId   String
+  partId        String?
+  label         String
+  reference     String?
+  quantity      Int      @default(1)
+  status        WorkOrderPartStatus @default(REQUESTED)
+  notes         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  workOrder     WorkOrder @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  part          Part?     @relation(fields: [partId], references: [id])
+
+  @@index([workOrderId])
+}
+
+enum WorkOrderPhotoPhase {
+  BEFORE
+  AFTER
+}
+
+// Photos avant/après — modèle relationnel dédié (cohérent avec VehiclePhoto/
+// ReportPhoto), pas un tableau photoUrls brut.
+model WorkOrderPhoto {
+  id          String   @id @default(cuid())
+  workOrderId String
+  phase       WorkOrderPhotoPhase
+  url         String
+  storageKey  String?
+  caption     String?
+  createdAt   DateTime @default(now())
+
+  workOrder   WorkOrder @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+
+  @@index([workOrderId])
+}
+
+// Embarquement garage — intervention mobile où la réparation s'avère
+// impossible sur place (voir WorkOrder.requiresTowing). Volontairement
+// minimal (pas de système de remorquage complet) : conserve l'Appointment
+// initial, ne fait que tracer le transfert.
 model WorkshopTransfer {
   id              String   @id @default(cuid())
   workOrderId     String   @unique
@@ -823,6 +969,7 @@ model Part {
   supplier      Supplier? @relation(fields: [supplierId], references: [id])
   inventory     Inventory?
   quoteItems    QuoteItem[]
+  workOrderParts WorkOrderPart[]
 }
 
 model Inventory {
@@ -973,6 +1120,17 @@ enum NotificationEvent {
   VEHICLE_READY
   INVOICE_AVAILABLE
   MAINTENANCE_REMINDER
+  // Work Order (Phase 7) — QUALITY_CHECK_REQUIRED et ADDITIONAL_WORK_REQUIRED
+  // sont des signaux internes production (pas de mécanisme de diffusion à
+  // l'équipe dans ce projet) : posés ici pour complétude mais jamais envoyés
+  // via sendNotification(), voir docs/WORK-ORDERS.md.
+  WORK_ORDER_CREATED
+  WORK_SCHEDULED
+  WORK_STARTED
+  WORK_WAITING_PARTS
+  QUALITY_CHECK_REQUIRED
+  WORK_COMPLETED
+  ADDITIONAL_WORK_REQUIRED
 }
 
 enum NotificationStatus {

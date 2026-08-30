@@ -27,6 +27,15 @@ const TEMPLATES: { event: NotificationEvent; body: string }[] = [
   { event: "VEHICLE_READY", body: "CHICANO AUTO SERVICES\nVotre véhicule est prêt à être récupéré." },
   { event: "INVOICE_AVAILABLE", body: "CHICANO AUTO SERVICES\nVotre facture est disponible." },
   { event: "MAINTENANCE_REMINDER", body: "CHICANO AUTO SERVICES\nUn entretien approche pour votre véhicule {{vehicle}} ({{maintenanceType}})." },
+  { event: "WORK_ORDER_CREATED", body: "CHICANO AUTO SERVICES\nVotre ordre de réparation {{reference}} a été créé suite à l'acceptation de votre devis." },
+  { event: "WORK_SCHEDULED", body: "CHICANO AUTO SERVICES\nVotre réparation {{reference}} est planifiée le {{date}}." },
+  { event: "WORK_STARTED", body: "CHICANO AUTO SERVICES\nLes travaux sur votre véhicule ont commencé." },
+  { event: "WORK_WAITING_PARTS", body: "CHICANO AUTO SERVICES\nVos travaux sont en attente de pièces. Nous vous tiendrons informé." },
+  // Signal interne production, jamais envoyé (voir docs/WORK-ORDERS.md) —
+  // template posé pour complétude uniquement.
+  { event: "QUALITY_CHECK_REQUIRED", body: "CHICANO AUTO SERVICES\nContrôle qualité requis pour l'ordre {{reference}}." },
+  { event: "WORK_COMPLETED", body: "CHICANO AUTO SERVICES\nLa réparation de votre véhicule est terminée. Votre véhicule est prêt." },
+  { event: "ADDITIONAL_WORK_REQUIRED", body: "CHICANO AUTO SERVICES\nDes travaux supplémentaires ont été identifiés sur l'ordre {{reference}}." },
 ];
 
 async function main() {

@@ -57,6 +57,9 @@ src/
       devis/
         page.tsx                  Mes devis (liste, hors DRAFT) (P6)
         [id]/page.tsx              Détail + Accepter/Refuser/Demander modification (P6)
+      reparations/
+        page.tsx                  Mes réparations (liste) (P7)
+        [id]/page.tsx              Détail en lecture seule (P7)
     production/
       layout.tsx                   Garde RBAC (PRODUCTION_STAFF/ADMIN/SUPER_ADMIN), dark mode, nav (P4)
       demandes/
@@ -64,12 +67,18 @@ src/
         [id]/page.tsx              Fiche + actions + affectation technicien (P4)
       kanban/page.tsx              Colonnes = statuts pilotables, clic → fiche (P4)
       calendrier/page.tsx          Vue semaine, créneau × jour (P4)
+      work-orders/
+        page.tsx                   Work Orders — colonnes par statut (P7)
+        [id]/page.tsx              Fiche + actions (planifier/affecter/transitions/contrôle qualité) (P7)
       techniciens/page.tsx         Liste lecture seule (P4)
     technicien/
       layout.tsx                   Garde RBAC (TECHNICIAN), dark mode (P5)
       page.tsx                     Mes interventions (liste des affectations)
       interventions/[assignmentId]/page.tsx  Détail + actions Je pars/Je suis arrivé/Démarrer diagnostic
       diagnostics/[diagnosticId]/page.tsx    Checklist + codes défaut + clôture
+      reparations/
+        page.tsx                  Mes réparations (liste des ordres affectés) (P7)
+        [id]/page.tsx              Détail + actions technicien (P7)
     api/
       auth/
         register/route.ts
@@ -121,6 +130,26 @@ src/
         diagnostics/[diagnosticId]/fault-codes/route.ts          POST — ajoute un code défaut (P5)
         diagnostics/[diagnosticId]/fault-codes/[faultCodeId]/route.ts  DELETE (P5)
         diagnostics/[diagnosticId]/complete/route.ts             POST — clôt le diagnostic (P5)
+        work-orders/route.ts                                     GET — mes ordres affectés (P7)
+        work-orders/[id]/route.ts                                GET (P7)
+        work-orders/[id]/start|pause|quality-check/route.ts      POST (P7)
+        work-orders/[id]/missing-part/route.ts                   POST — pièce manquante + WAITING_PARTS (P7)
+        work-orders/[id]/additional-work/route.ts                POST (P7)
+        work-orders/[id]/items/[itemId]/route.ts                 PATCH — travail effectué (P7)
+        work-orders/[id]/photos/route.ts                         POST (multipart, avant/après) (P7)
+      production/work-orders/route.ts                            GET (liste, filtres) (P7)
+      production/work-orders/[id]/route.ts                       GET (détail) (P7)
+      production/work-orders/[id]/schedule|assign-technician/route.ts       POST (P7)
+      production/work-orders/[id]/start|pause|resume|waiting-parts/route.ts POST (P7)
+      production/work-orders/[id]/quality-check/route.ts                    POST — envoi contrôle (P7)
+      production/work-orders/[id]/quality-check/pass|fail/route.ts          POST (P7)
+      production/work-orders/[id]/cancel|additional-work/route.ts           POST (P7)
+      production/work-orders/[id]/parts/route.ts                           POST — ajouter une pièce (P7)
+      production/work-orders/[id]/parts/[partId]/route.ts                  PATCH — statut pièce (P7)
+      production/work-orders/[id]/items/[itemId]/route.ts                  PATCH (P7)
+      production/work-orders/[id]/photos/route.ts                          POST (multipart) (P7)
+      production/work-orders/[id]/workshop-transfer/route.ts               POST — embarquement (P7)
+      production/work-orders/[id]/workshop-transfer/receive/route.ts       POST (P7)
   proxy.ts                          Garde d'accès (Node.js runtime, Next 16) — rôle sur /production, /technicien, /espace-client (P5)
   lib/
     db.ts                           Client Prisma singleton
@@ -189,6 +218,11 @@ src/
       service.test.ts
       options.ts                    Libellés statut + formatXOF (F CFA)
       reference.ts                  Génération CHC-QT-000001 (P6)
+    work-orders/
+      service.ts                    WorkOrder + Item + Part + Photo (créé via acceptQuote()) (P7)
+      service.test.ts
+      options.ts                    Libellés statut/priorité/type/statut pièce
+      reference.ts                  Génération CHC-WO-000001 (P7)
   components/
     marketing/site-header.tsx, site-footer.tsx
     auth/logout-button.tsx
@@ -203,17 +237,19 @@ src/
       assign-technician-form.tsx    Formulaire d'affectation (P4)
       report-editor.tsx              Créer/éditer/publier le rapport (P6)
       quote-editor.tsx                Créer un devis, l'envoyer, émettre une v2 (P6)
+      work-order-actions.tsx          Planifier/affecter/transitions/contrôle qualité (P7)
     technicien/
       intervention-actions.tsx      Je pars/Je suis arrivé/Démarrer le diagnostic (P5)
       diagnostic-checklist.tsx      10 catégories, upsert par ligne (P5)
       fault-codes-form.tsx          Ajout/retrait de codes défaut (P5)
       complete-diagnostic-button.tsx (P5)
+      work-order-actions.tsx        Démarrer/pause/pièce manquante/contrôle/travaux suppl. (P7)
     quotes/
       quote-response-actions.tsx    Accepter/Refuser/Demander modification (client) (P6)
 prisma/
-  schema.prisma                     Modèle de données complet (section 62) + extensions véhicule (P2) + demandes (P3) + sequenceNumber rapport/devis (P6)
-  seed.ts                           Templates de notification (20) + compte admin de test + techniciens démo (P4)
-  migrations/                       20260825001111_initial_schema, 20260825162443_service_requests, 20260826070000_diagnostic_report_quote_sequence (P6) — aucune nouvelle en P4/P5
+  schema.prisma                     Modèle de données complet (section 62) + extensions véhicule (P2) + demandes (P3) + sequenceNumber rapport/devis (P6) + Work Order refondu (P7)
+  seed.ts                           Templates de notification (27) + compte admin de test + techniciens démo (P4)
+  migrations/                       20260825001111_initial_schema, 20260825162443_service_requests, 20260826070000_diagnostic_report_quote_sequence (P6), 20260827100000_work_orders_phase7, 20260827100100_work_order_notifications (P7) — aucune nouvelle en P4/P5
 vitest.config.mts                   Configuration des tests unitaires (npm test)
 docker-compose.yml                  PostgreSQL local (port 5433) — non utilisé depuis P2.5, Neon en usage réel
 ```

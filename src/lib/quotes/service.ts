@@ -2,15 +2,16 @@ import { db } from "@/lib/db";
 import { randomUUID } from "crypto";
 import { formatQuoteReference } from "./reference";
 import { sendNotification } from "@/lib/notifications/service";
+import { createWorkOrderFromQuote } from "@/lib/work-orders/service";
 import type { Prisma } from "@prisma/client";
 
 // Devis versionné (Phase 6) — cycle DRAFT → SENT → (ACCEPTED | REJECTED |
 // MODIFICATION_REQUESTED) → SENT (v2) → ... . Chaque envoi crée une
 // QuoteVersion immuable (ligne d'historique de négociation) plutôt que de
 // modifier la version précédente — le client doit pouvoir comparer ce qui a
-// changé. S'arrête à ACCEPTED : la création du WorkOrder (réparation)
-// appartient à la Phase 7 ("Validation + réparation + clôture"), volontairement
-// non déclenchée ici. Voir docs/REPORTS-QUOTES.md.
+// changé. acceptQuote() déclenche automatiquement la création du WorkOrder
+// (Phase 7, "QUOTE ACCEPTED → WORK ORDER CREATED") — voir
+// src/lib/work-orders/service.ts et docs/WORK-ORDERS.md.
 
 export class QuoteNotFoundError extends Error {
   constructor() {
@@ -229,6 +230,8 @@ export async function acceptQuote(customerId: string, quoteId: string) {
   if (customer) {
     await sendNotification(customer.userId, "QUOTE_ACCEPTED", { reference: quote.quoteNumber });
   }
+
+  await createWorkOrderFromQuote(quoteId);
 
   return getQuoteForProduction(quoteId);
 }

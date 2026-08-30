@@ -17,7 +17,12 @@ export default async function TechnicienDashboardPage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold">Mes interventions</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold">Mes interventions</h1>
+        <Link href="/technicien/reparations" className="text-sm text-chicano-red hover:underline">
+          Mes réparations →
+        </Link>
+      </div>
       <p className="mt-1 text-sm text-white/60">{assignments.length} intervention(s) en cours</p>
 
       <div className="mt-6 space-y-3">

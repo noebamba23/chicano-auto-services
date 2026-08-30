@@ -66,9 +66,15 @@ export function createFakeDb() {
   let quotes: Row[] = [];
   let quoteVersions: Row[] = [];
   let quoteItems: Row[] = [];
+  let workOrders: Row[] = [];
+  let workOrderItems: Row[] = [];
+  let workOrderParts: Row[] = [];
+  let workOrderPhotos: Row[] = [];
+  let workshopTransfers: Row[] = [];
   let nextSrSequence = 1;
   let nextReportSequence = 1;
   let nextQuoteSequence = 1;
+  let nextWorkOrderSequence = 1;
 
   function withRequestExtras(row: Row) {
     return {
@@ -163,12 +169,32 @@ export function createFakeDb() {
     return true;
   }
 
+  // Phase 7 — le diagnostic imbriqué expose désormais aussi appointmentId/
+  // appointment/report (nécessaires à createWorkOrderFromQuote(), voir
+  // src/lib/work-orders/service.ts), en plus de la forme déjà utilisée par
+  // QUOTE_INCLUDE (diagnostic.appointment.serviceRequest.referenceNumber).
   function withQuoteExtras(row: Row) {
     const diagnostic = diagnostics.find((d) => d.id === row.diagnosticId);
+    const appointment = diagnostic ? appointments.find((a) => a.id === diagnostic.appointmentId) : null;
+    const sr = appointment ? serviceRequests.find((s) => s.id === appointment.serviceRequestId) : null;
+    const report = diagnostic ? diagnosticReports.find((r) => r.diagnosticId === diagnostic.id) : null;
     return {
       ...row,
       vehicle: vehicles.find((v) => v.id === row.vehicleId) ?? null,
-      diagnostic: diagnostic ? { id: diagnostic.id, appointment: null } : null,
+      diagnostic: diagnostic
+        ? {
+            id: diagnostic.id,
+            appointmentId: diagnostic.appointmentId,
+            appointment: appointment
+              ? {
+                  serviceRequestId: appointment.serviceRequestId,
+                  scheduledDate: appointment.scheduledDate ?? null,
+                  serviceRequest: sr ? { referenceNumber: sr.referenceNumber } : null,
+                }
+              : null,
+            report: report ? { id: report.id } : null,
+          }
+        : null,
       versions: quoteVersions
         .filter((v) => v.quoteId === row.id)
         .sort((a, b) => (a.versionNumber as number) - (b.versionNumber as number))
@@ -523,12 +549,191 @@ export function createFakeDb() {
       quoteVersions.push(row);
       return row;
     },
+    async findUnique({
+      where,
+    }: {
+      where: { quoteId_versionNumber: { quoteId: string; versionNumber: number } };
+    }) {
+      const key = where.quoteId_versionNumber;
+      const row = quoteVersions.find((v) => v.quoteId === key.quoteId && v.versionNumber === key.versionNumber);
+      if (!row) return null;
+      return { ...row, items: quoteItems.filter((it) => it.quoteVersionId === row.id) };
+    },
   };
 
   const quoteItemModel = {
     async create({ data }: { data: Record<string, unknown> }) {
       const row: Row = { id: randomUUID(), partId: null, ...data } as Row;
       quoteItems.push(row);
+      return row;
+    },
+  };
+
+  // Phase 7 — Work Order. Même limite documentée pour withReportExtras/
+  // withQuoteExtras : forme suffisante pour la logique applicative testée,
+  // pas une réplique fidèle complète de la forme Prisma (ex. customer.user/
+  // technician.user restent tels que seedés, souvent absents — vérifié en
+  // conditions réelles via Neon).
+  function withWorkOrderExtras(row: Row) {
+    const customer = customers.find((c) => c.id === row.customerId) ?? null;
+    const serviceRequest = serviceRequests.find((s) => s.id === row.serviceRequestId) ?? null;
+    const appointment = appointments.find((a) => a.id === row.appointmentId) ?? null;
+    const quote = quotes.find((q) => q.id === row.quoteId) ?? null;
+    const diagnosticReport = diagnosticReports.find((r) => r.id === row.diagnosticReportId) ?? null;
+    const technician = technicians.find((t) => t.id === row.technicianId) ?? null;
+    return {
+      ...row,
+      customer,
+      vehicle: vehicles.find((v) => v.id === row.vehicleId) ?? null,
+      serviceRequest: serviceRequest
+        ? {
+            id: serviceRequest.id,
+            referenceNumber: serviceRequest.referenceNumber,
+            category: serviceRequest.category,
+            interventionType: serviceRequest.interventionType,
+          }
+        : null,
+      appointment: appointment
+        ? { id: appointment.id, scheduledDate: appointment.scheduledDate ?? null, scheduledSlot: appointment.scheduledSlot ?? null }
+        : null,
+      quote: quote
+        ? { id: quote.id, quoteNumber: quote.quoteNumber, currentVersion: quote.currentVersion, totalAmount: quote.totalAmount, currency: quote.currency }
+        : null,
+      diagnosticReport: diagnosticReport
+        ? { id: diagnosticReport.id, reportNumber: diagnosticReport.reportNumber, conclusion: diagnosticReport.conclusion, severity: diagnosticReport.severity }
+        : null,
+      technician,
+      items: workOrderItems.filter((i) => i.workOrderId === row.id),
+      parts: workOrderParts.filter((p) => p.workOrderId === row.id),
+      photos: workOrderPhotos.filter((p) => p.workOrderId === row.id),
+      transfer: workshopTransfers.find((t) => t.workOrderId === row.id) ?? null,
+    };
+  }
+
+  const workOrderModel = {
+    async create({ data }: { data: Record<string, unknown> }) {
+      const row: Row = {
+        id: randomUUID(),
+        sequenceNumber: nextWorkOrderSequence++,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        status: "DRAFT",
+        priority: "NORMAL",
+        appointmentId: null,
+        diagnosticReportId: null,
+        technicianId: null,
+        scheduledDate: null,
+        internalNotes: null,
+        qualityCheckPassed: null,
+        qualityCheckNotes: null,
+        qualityCheckedById: null,
+        qualityCheckedAt: null,
+        testDrivePerformed: false,
+        testDriveNotes: null,
+        additionalWorkRequested: false,
+        additionalWorkNotes: null,
+        requiresTowing: false,
+        ...data,
+      } as Row;
+      workOrders.push(row);
+      return row;
+    },
+    async update({ where, data }: { where: { id: string }; data: Record<string, unknown> }) {
+      const row = workOrders.find((r) => r.id === where.id);
+      if (!row) throw new Error("Record to update not found.");
+      Object.assign(row, data, { updatedAt: new Date() });
+      return withWorkOrderExtras(row);
+    },
+    async findUnique({ where }: { where: Record<string, unknown> }) {
+      const row = workOrders.find((r) => matches(r, where));
+      return row ? withWorkOrderExtras(row) : null;
+    },
+    async findFirst({ where, orderBy }: { where: Record<string, unknown>; orderBy?: unknown }) {
+      const rows = applyOrder(workOrders.filter((r) => matches(r, where)), orderBy);
+      return rows[0] ? withWorkOrderExtras(rows[0]) : null;
+    },
+    async findMany({ where, orderBy }: { where: Record<string, unknown>; orderBy?: unknown }) {
+      const rows = applyOrder(workOrders.filter((r) => matches(r, where)), orderBy);
+      return rows.map(withWorkOrderExtras);
+    },
+  };
+
+  const workOrderItemModel = {
+    async create({ data }: { data: Record<string, unknown> }) {
+      const row: Row = {
+        id: randomUUID(),
+        createdAt: new Date(),
+        status: "PENDING",
+        unit: null,
+        unitPrice: null,
+        totalPrice: null,
+        sourceQuoteItemId: null,
+        estimatedMinutes: null,
+        actualMinutes: null,
+        technicianId: null,
+        ...data,
+      } as Row;
+      workOrderItems.push(row);
+      return row;
+    },
+    async update({ where, data }: { where: { id: string }; data: Record<string, unknown> }) {
+      const row = workOrderItems.find((r) => r.id === where.id);
+      if (!row) throw new Error("Record to update not found.");
+      Object.assign(row, data);
+      return row;
+    },
+  };
+
+  const workOrderPartModel = {
+    async create({ data }: { data: Record<string, unknown> }) {
+      const row: Row = {
+        id: randomUUID(),
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        status: "REQUESTED",
+        reference: null,
+        notes: null,
+        partId: null,
+        ...data,
+      } as Row;
+      workOrderParts.push(row);
+      return row;
+    },
+    async update({ where, data }: { where: { id: string }; data: Record<string, unknown> }) {
+      const row = workOrderParts.find((r) => r.id === where.id);
+      if (!row) throw new Error("Record to update not found.");
+      Object.assign(row, data, { updatedAt: new Date() });
+      return row;
+    },
+  };
+
+  const workOrderPhotoModel = {
+    async create({ data }: { data: Record<string, unknown> }) {
+      const row: Row = { id: randomUUID(), createdAt: new Date(), storageKey: null, caption: null, ...data } as Row;
+      workOrderPhotos.push(row);
+      return row;
+    },
+  };
+
+  const workshopTransferModel = {
+    async create({ data }: { data: Record<string, unknown> }) {
+      const row: Row = {
+        id: randomUUID(),
+        transferredAt: new Date(),
+        receivedAt: null,
+        vehicleCondition: null,
+        photoUrls: [],
+        destination: null,
+        transferredById: null,
+        ...data,
+      } as Row;
+      workshopTransfers.push(row);
+      return row;
+    },
+    async update({ where, data }: { where: { workOrderId: string }; data: Record<string, unknown> }) {
+      const row = workshopTransfers.find((r) => r.workOrderId === where.workOrderId);
+      if (!row) throw new Error("Record to update not found.");
+      Object.assign(row, data);
       return row;
     },
   };
@@ -551,6 +756,11 @@ export function createFakeDb() {
     quote: quoteModel,
     quoteVersion: quoteVersionModel,
     quoteItem: quoteItemModel,
+    workOrder: workOrderModel,
+    workOrderItem: workOrderItemModel,
+    workOrderPart: workOrderPartModel,
+    workOrderPhoto: workOrderPhotoModel,
+    workshopTransfer: workshopTransferModel,
     async $transaction(fnOrArray: unknown) {
       if (typeof fnOrArray === "function") {
         return (fnOrArray as (tx: typeof fakeDb) => unknown)(fakeDb);
@@ -597,9 +807,15 @@ export function createFakeDb() {
       quotes = [];
       quoteVersions = [];
       quoteItems = [];
+      workOrders = [];
+      workOrderItems = [];
+      workOrderParts = [];
+      workOrderPhotos = [];
+      workshopTransfers = [];
       nextSrSequence = 1;
       nextReportSequence = 1;
       nextQuoteSequence = 1;
+      nextWorkOrderSequence = 1;
       fakeDb._serviceRequests = serviceRequests;
       fakeDb._appointments = appointments;
       fakeDb._technicianAssignments = technicianAssignments;
