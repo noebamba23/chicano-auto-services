@@ -143,11 +143,16 @@ export async function getInvoiceForProduction(id: string) {
 
 export interface InvoiceProductionFilters {
   status?: InvoiceStatus;
+  customerId?: string;
 }
 
+// customerId optionnel (Phase 10, Customer 360) — contrairement à
+// listInvoicesForCustomer() côté espace client, n'exclut jamais les
+// factures DRAFT : la production doit voir qu'un Work Order terminé a
+// généré une facture en attente d'émission.
 export function listInvoicesForProduction(filters: InvoiceProductionFilters = {}) {
   return db.invoice.findMany({
-    where: { status: filters.status },
+    where: { status: filters.status, customerId: filters.customerId },
     include: INVOICE_INCLUDE,
     orderBy: { createdAt: "desc" },
   });

@@ -20,6 +20,19 @@ import {
   MaintenanceConflictError,
 } from "@/lib/maintenance/service";
 import { MileageRegressionError } from "@/lib/vehicles/mileage";
+import { InvoiceNotFoundError, InvoiceConflictError, PaymentValidationError } from "@/lib/billing/service";
+import {
+  CustomerNotFoundError,
+  CampaignNotFoundError,
+  CampaignConflictError,
+  CarePlanNotFoundError,
+  CareSubscriptionNotFoundError,
+  CareConflictError,
+  FollowUpNotFoundError,
+  FollowUpConflictError,
+  ReferralConflictError,
+  ConsentError,
+} from "@/lib/crm/errors";
 
 // Catalogue d'erreurs HTTP de l'API (section 13 de la Phase 2) :
 //   400 Données invalides         — payload rejeté par un schéma zod
@@ -78,6 +91,22 @@ export function jsonFromKnownError(err: unknown) {
   if (err instanceof MaintenanceReminderNotFoundError) return jsonError(err.message, 404);
   if (err instanceof MaintenanceConflictError) return jsonError(err.message, 409);
   if (err instanceof MileageRegressionError) return jsonError(err.message, 409);
+  // Facturation (Phase 9) — absentes du catalogue par omission jusqu'ici
+  // (repassaient en 500 générique), corrigé à l'occasion de la Phase 10.
+  if (err instanceof InvoiceNotFoundError) return jsonError(err.message, 404);
+  if (err instanceof InvoiceConflictError) return jsonError(err.message, 409);
+  if (err instanceof PaymentValidationError) return jsonError(err.message, 400);
+  // CRM & CHICANO CARE (Phase 10).
+  if (err instanceof CustomerNotFoundError) return jsonError(err.message, 404);
+  if (err instanceof CampaignNotFoundError) return jsonError(err.message, 404);
+  if (err instanceof CampaignConflictError) return jsonError(err.message, 409);
+  if (err instanceof CarePlanNotFoundError) return jsonError(err.message, 404);
+  if (err instanceof CareSubscriptionNotFoundError) return jsonError(err.message, 404);
+  if (err instanceof CareConflictError) return jsonError(err.message, 409);
+  if (err instanceof FollowUpNotFoundError) return jsonError(err.message, 404);
+  if (err instanceof FollowUpConflictError) return jsonError(err.message, 409);
+  if (err instanceof ReferralConflictError) return jsonError(err.message, 409);
+  if (err instanceof ConsentError) return jsonError(err.message, 409);
   return null;
 }
 

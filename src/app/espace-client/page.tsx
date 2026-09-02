@@ -16,6 +16,8 @@ const ACTIONS = [
   { emoji: "💰", label: "Mes devis", href: "/espace-client/devis", available: true },
   { emoji: "🛠️", label: "Mes réparations", href: "/espace-client/reparations", available: true },
   { emoji: "🧾", label: "Mes factures", href: "/espace-client/factures", available: true },
+  { emoji: "💎", label: "CHICANO CARE", href: "/espace-client/care", available: true },
+  { emoji: "⚙️", label: "Paramètres", href: "/espace-client/parametres", available: true },
 ];
 
 export default async function ClientDashboardPage() {

@@ -13,6 +13,7 @@ const NAV_LINKS = [
   { href: "/production/work-orders", label: "Work Orders" },
   { href: "/production/maintenance", label: "Maintenance" },
   { href: "/production/facturation", label: "Facturation" },
+  { href: "/production/crm", label: "CRM" },
   { href: "/production/dashboard", label: "Dashboard" },
   { href: "/production/techniciens", label: "Techniciens" },
 ];

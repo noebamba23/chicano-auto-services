@@ -55,6 +55,10 @@ model User {
   auditLogs           AuditLog[]    @relation("AuditLogActor")
   notifications       Notification[]
   sessions            Session[]
+  campaignsCreated    Campaign[]
+  interactionsLogged  CustomerInteraction[]
+  followUpsAssigned   FollowUp[]    @relation("FollowUpAssignedTo")
+  followUpsCreated    FollowUp[]    @relation("FollowUpCreatedBy")
 
   @@index([phoneE164])
   @@index([status])
@@ -106,6 +110,20 @@ model Customer {
   companyId     String?
   crmStage      CrmStage @default(NEW)
   crmSource     CrmSource?
+  // Segmentation commerciale (Phase 10) — distincte de crmStage (entonnoir
+  // pré-client, Phase 0). INDIVIDUAL par défaut, ne présuppose jamais un
+  // client existant PROFESSIONAL/BUSINESS/FLEET sans action explicite.
+  customerType  CustomerType @default(INDIVIDUAL)
+  // Consentement (Phase 10) — absent avant cette phase, confirmé par audit.
+  // Défaut false partout : aucun consentement marketing n'est présumé pour
+  // un client déjà existant, voir docs/CRM.md.
+  whatsappOptIn    Boolean  @default(false)
+  emailOptIn       Boolean  @default(false)
+  smsOptIn         Boolean  @default(false)
+  marketingOptIn   Boolean  @default(false)
+  consentGivenAt   DateTime?
+  consentSource    String?
+  consentRevokedAt DateTime?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
@@ -119,6 +137,18 @@ model Customer {
   payments      Payment[]
   leads         Lead[]
   workOrders    WorkOrder[]
+  careSubscriptions CareSubscription[]
+  interactions  CustomerInteraction[]
+  followUps     FollowUp[]
+  referralsSent     Referral[] @relation("ReferralReferrer")
+  referralsReceived Referral[] @relation("ReferralReferred")
+}
+
+enum CustomerType {
+  INDIVIDUAL
+  PROFESSIONAL
+  BUSINESS
+  FLEET
 }
 
 enum CrmStage {
@@ -329,6 +359,7 @@ model Vehicle {
   invoices              Invoice[]
   maintenancePlans      MaintenancePlan[]
   maintenanceReminders  MaintenanceReminder[]
+  careSubscriptions     CareSubscription[]
 
   @@index([customerId])
   @@index([customerId, isPrimary])
@@ -1279,6 +1310,11 @@ enum NotificationEvent {
   PAYMENT_PARTIAL
   INVOICE_PAID
   PAYMENT_FAILED
+  // CRM & CHICANO CARE (Phase 10).
+  CARE_STARTED
+  CARE_EXPIRING
+  CARE_EXPIRED
+  FOLLOW_UP_DUE
 }
 
 enum NotificationStatus {
@@ -1330,4 +1366,198 @@ model AuditLog {
 
   @@index([entity, entityId])
   @@index([userId])
+}
+
+// ============================================================
+// CRM, CHICANO CARE & CROISSANCE COMMERCIALE (Phase 10)
+// ============================================================
+//
+// Segmentation comportementale (NEW/ACTIVE/RECURRING/DORMANT/AT_RISK/VIP) et
+// parcours client (PROSPECT→...→CARE_CUSTOMER) ne sont PAS stockés ici —
+// calculés à la volée depuis les données réelles (ServiceRequest/WorkOrder/
+// Invoice/MaintenanceReminder/CareSubscription), même discipline que
+// MaintenanceReminderLevel (Phase 8) : jamais de champ dupliqué à
+// resynchroniser. Voir src/lib/crm/segmentation.ts et docs/CRM.md.
+
+enum CampaignObjective {
+  MAINTENANCE
+  SEASONAL_CHECK
+  BATTERY
+  TYRES
+  TRAVEL_CHECK
+  REACTIVATION
+  CARE
+}
+
+// Mêmes valeurs que la segmentation comportementale calculée (voir plus
+// haut) — sert de critère de ciblage pour une campagne, jamais stocké côté
+// Customer.
+enum CampaignSegment {
+  NEW
+  ACTIVE
+  RECURRING
+  DORMANT
+  AT_RISK
+  VIP
+}
+
+enum CampaignStatus {
+  DRAFT
+  SCHEDULED
+  RUNNING
+  COMPLETED
+  CANCELLED
+}
+
+// Campagne minimale (pas un moteur de marketing automation) — un envoi
+// n'est jamais déclenché automatiquement, toujours via une action
+// production explicite après un mode PREVIEW. Voir docs/CRM.md.
+model Campaign {
+  id            String   @id @default(cuid())
+  name          String
+  objective     CampaignObjective
+  segment       CampaignSegment
+  channel       NotificationChannel
+  message       String
+  status        CampaignStatus @default(DRAFT)
+  scheduledAt   DateTime?
+  sentCount     Int      @default(0)
+  skippedCount  Int      @default(0)
+  createdById   String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  createdBy     User     @relation(fields: [createdById], references: [id])
+
+  @@index([status])
+  @@index([segment])
+}
+
+// Offre commerciale CHICANO CARE — prix/durée/fréquence libres, jamais
+// imposés en dur dans le code (voir docs/CHICANO-CARE.md).
+model CarePlan {
+  id               String   @id @default(cuid())
+  name             String
+  description      String?
+  price            Int
+  durationMonths   Int
+  frequencyMonths  Int
+  includedServices String[]
+  active           Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  subscriptions    CareSubscription[]
+}
+
+enum CareSubscriptionStatus {
+  ACTIVE
+  PAUSED
+  CANCELLED
+  EXPIRED
+}
+
+// vehicleId nullable : un abonnement peut être rattaché à un véhicule
+// précis ou au compte client dans son ensemble. AUCUN paiement récurrent
+// automatique ici — les paiements restent exactement ceux de la Phase 9
+// (recordPayment manuel), voir docs/CHICANO-CARE.md.
+model CareSubscription {
+  id          String   @id @default(cuid())
+  customerId  String
+  vehicleId   String?
+  carePlanId  String
+  status      CareSubscriptionStatus @default(ACTIVE)
+  startedAt   DateTime @default(now())
+  endedAt     DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  customer    Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  vehicle     Vehicle? @relation(fields: [vehicleId], references: [id])
+  carePlan    CarePlan @relation(fields: [carePlanId], references: [id])
+
+  @@index([customerId])
+  @@index([status])
+}
+
+enum InteractionType {
+  CALL
+  WHATSAPP
+  EMAIL
+  SMS
+  NOTE
+  APPOINTMENT
+  FOLLOW_UP
+}
+
+// Historique d'échanges avec un client — jamais exposé au client lui-même
+// (RBAC réservé à la production), contenu sensible visible uniquement par
+// le personnel habilité. Voir docs/CRM.md.
+model CustomerInteraction {
+  id          String   @id @default(cuid())
+  customerId  String
+  type        InteractionType
+  subject     String?
+  content     String?
+  actorId     String
+  createdAt   DateTime @default(now())
+
+  customer    Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  actor       User     @relation(fields: [actorId], references: [id])
+
+  @@index([customerId])
+  @@index([createdAt])
+}
+
+enum FollowUpStatus {
+  PENDING
+  DONE
+  CANCELLED
+}
+
+// Relance commerciale — motif + prochaine action, créable en production.
+model FollowUp {
+  id            String   @id @default(cuid())
+  customerId    String
+  reason        String
+  dueAt         DateTime
+  status        FollowUpStatus @default(PENDING)
+  notes         String?
+  assignedToId  String?
+  completedAt   DateTime?
+  cancelledAt   DateTime?
+  createdById   String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  customer      Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  assignedTo    User?    @relation("FollowUpAssignedTo", fields: [assignedToId], references: [id])
+  createdBy     User     @relation("FollowUpCreatedBy", fields: [createdById], references: [id])
+
+  @@index([customerId])
+  @@index([status])
+  @@index([dueAt])
+}
+
+enum ReferralStatus {
+  PENDING
+  QUALIFIED
+  REWARDED
+  CANCELLED
+}
+
+// Architecture PRÉPARATOIRE uniquement — pas de système d'affiliation
+// complet (pas de calcul de récompense automatique dans cette phase).
+model Referral {
+  id                  String   @id @default(cuid())
+  referrerCustomerId  String
+  referredCustomerId  String   @unique
+  status              ReferralStatus @default(PENDING)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  referrer            Customer @relation("ReferralReferrer", fields: [referrerCustomerId], references: [id])
+  referred            Customer @relation("ReferralReferred", fields: [referredCustomerId], references: [id])
+
+  @@index([referrerCustomerId])
 }

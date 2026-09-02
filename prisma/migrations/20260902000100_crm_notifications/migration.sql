@@ -1,0 +1,5 @@
+-- AlterEnum
+ALTER TYPE "NotificationEvent" ADD VALUE 'CARE_STARTED';
+ALTER TYPE "NotificationEvent" ADD VALUE 'CARE_EXPIRING';
+ALTER TYPE "NotificationEvent" ADD VALUE 'CARE_EXPIRED';
+ALTER TYPE "NotificationEvent" ADD VALUE 'FOLLOW_UP_DUE';

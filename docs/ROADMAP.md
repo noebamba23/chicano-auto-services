@@ -16,7 +16,7 @@ Ne pas paralléliser les phases : chacune se construit sur la précédente.
 | P7 | Validation + réparation + clôture | ✅ Fait — voir `WORK-ORDERS.md` |
 | P8 | Historique + rappels | ✅ Fait — voir `MAINTENANCE.md` |
 | P9 | Facturation, paiements & rentabilité | ✅ Fait — voir `BILLING.md` (le libellé initial "CRM + KPI" est partiellement couvert : dashboard KPI livré, CRM avancé reste à faire) |
-| P10 | B2B / Fleet | ⏳ À faire |
+| P10 | CRM, Customer 360 & CHICANO CARE | ✅ Fait — voir [`CRM.md`](CRM.md) et [`CHICANO-CARE.md`](CHICANO-CARE.md) (le libellé initial "B2B / Fleet" n'est que partiellement couvert : préparation posée — `CustomerType.FLEET`, `Company`/`Fleet`/`FleetContract` réutilisés tels quels — B2B/flotte complet reste à faire) |
 
 ## Détail Phase 1 (livrée)
 
@@ -325,11 +325,71 @@ réelle du passage en retard (déclenchement manuel), CHICANO CARE
 (abonnements) et B2B/flotte complets — voir `BILLING.md` pour le détail de
 chaque limite assumée.
 
+## Détail Phase 10 (livrée)
+
+- Segmentation comportementale déterministe (`NEW`/`ACTIVE`/`RECURRING`/
+  `DORMANT`/`AT_RISK`/`VIP`) et parcours client, calculés à la volée
+  depuis les données réelles — aucun score IA, aucun champ stocké à
+  resynchroniser (même discipline que `MaintenanceReminderLevel`,
+  Phase 8).
+- Customer 360 (`getCustomer360()`) : agrège véhicules, demandes,
+  rendez-vous, devis, ordres de réparation, factures (y compris DRAFT),
+  paiements (déjà portés par chaque facture), rapports de diagnostic
+  publiés, rappels de maintenance, interactions, relances et CHICANO CARE
+  — chaque section lue via la fonction déjà existante de son domaine,
+  aucun second historique créé. Liens vers les fiches détail production
+  déjà existantes.
+- Consentement (`whatsappOptIn`/`emailOptIn`/`smsOptIn`/`marketingOptIn`),
+  strictement séparé des notifications transactionnelles existantes
+  (jamais gatées) — une campagne marketing exige `marketingOptIn = true`,
+  y compris pour un client déjà opt-in WhatsApp.
+- Interactions (`CustomerInteraction`, 7 types) et relances
+  (`FollowUp`, `PENDING`/`DONE`/`CANCELLED`) — toujours manuelles, jamais
+  déclenchées automatiquement par un signal de segmentation.
+- Campagnes (`Campaign`, `DRAFT → SCHEDULED/RUNNING → COMPLETED/
+  CANCELLED`) : ciblage recalculé au moment de l'envoi, mode PREVIEW
+  obligatoire, aucun scheduler réel, aucun provider EMAIL/SMS réel,
+  WhatsApp mock jamais présenté comme actif.
+- CHICANO CARE (`CarePlan`/`CareSubscription`, `ACTIVE`/`PAUSED`/
+  `CANCELLED`/`EXPIRED`) : catalogue à prix libres, réutilise
+  intégralement le moteur de maintenance existant (Phase 8), "Prendre
+  rendez-vous" crée toujours une `ServiceRequest` — jamais un
+  `Appointment` direct. Aucun paiement récurrent automatique, les
+  paiements restent le flux manuel de la Phase 9.
+- Parrainage (`Referral`) : architecture préparatoire uniquement, pas de
+  système d'affiliation complet.
+- `requireAdminRole()` ajouté (même pattern que `requireProductionRole()`)
+  — aucun rôle Manager créé (voir `CRM.md`).
+- Interfaces production (`/production/crm`, `/production/crm/clients`,
+  `/production/crm/follow-ups`, `/production/crm/care-plans`,
+  `/production/crm/campaigns`) et client (`/espace-client/care`,
+  `/espace-client/parametres`).
+- 4 nouveaux événements `NotificationEvent` (`CARE_STARTED`/
+  `CARE_EXPIRING`/`CARE_EXPIRED`/`FOLLOW_UP_DUE`), templates seedés
+  (39 au total).
+- 40 nouveaux tests unitaires (268 au total) + vérification réelle Neon
+  (29/29 assertions, y compris ownership cross-customer sur tous les
+  domaines Customer 360) + navigateur (client, production, RBAC, mode
+  PREVIEW, ownership).
+- Documentation complète : [`CRM.md`](CRM.md) et
+  [`CHICANO-CARE.md`](CHICANO-CARE.md).
+
+## Non couvert par la Phase 10 (volontairement)
+
+Marketing automation complexe, scoring par IA, paiement récurrent
+automatique, ERP, fleet management complet, système d'affiliation
+complet, intégration WhatsApp Business API réelle (mock tant
+qu'aucun credential n'est configuré), moteur de recommandation IA,
+CHICANO POINTS/fidélité (aucun barème d'accrual fourni — non inventé),
+lien stocké `MaintenanceReminder` → `ServiceRequest` (le "taux rappel →
+rendez-vous" du dashboard CEO reste une approximation) — voir `CRM.md`
+et `CHICANO-CARE.md` pour le détail de chaque limite assumée.
+
 ## PostgreSQL
 
 Résolu en Phase 2.5 : Docker Desktop restait bloqué sur cette machine (jamais
 dépassé son initialisation depuis l'installation) — contournement définitif via
 **Neon** (PostgreSQL cloud), `DATABASE_URL` pointant vers un projet Neon réel depuis
-lors. Toutes les migrations (P2.5, P3, P6, P7, P8, P9 — aucune nouvelle migration en
+lors. Toutes les migrations (P2.5, P3, P6, P7, P8, P9, P10 — aucune nouvelle migration en
 P4/P5, le schéma existant suffisait) ont été appliquées et validées contre
 cette base réelle, pas contre un mock.

@@ -64,6 +64,8 @@ src/
       factures/
         page.tsx                  Mes factures (liste, hors DRAFT) (P9)
         [id]/page.tsx              Détail + bouton Payer (Mobile Money) (P9)
+      care/page.tsx                CHICANO CARE — abonnements + prochains entretiens (P10)
+      parametres/page.tsx          Préférences de communication (consentement) (P10)
     production/
       layout.tsx                   Garde RBAC (PRODUCTION_STAFF/ADMIN/SUPER_ADMIN), dark mode, nav (P4)
       demandes/
@@ -79,8 +81,16 @@ src/
       facturation/
         page.tsx                  Liste factures, filtres statut (P9)
         [id]/page.tsx              Fiche + lignes/paiements/marge + actions (P9)
-      dashboard/page.tsx           KPI CEO (CA, marge, panier moyen...) (P9)
+      dashboard/page.tsx           KPI CEO (CA, marge, panier moyen... + KPI CRM) (P9, étendu P10)
       techniciens/page.tsx         Liste lecture seule (P4)
+      crm/
+        page.tsx                  Dashboard CRM — segments, opérationnel, KPI CEO (P10)
+        clients/
+          page.tsx                Annuaire — recherche/filtre par segment (P10)
+          [id]/page.tsx            Customer 360 (P10)
+        follow-ups/page.tsx        Relances — liste + filtre statut (P10)
+        care-plans/page.tsx        Catalogue CHICANO CARE (ADMIN/SUPER_ADMIN en écriture) (P10)
+        campaigns/page.tsx         Campagnes — création/preview/envoi (ADMIN/SUPER_ADMIN) (P10)
     technicien/
       layout.tsx                   Garde RBAC (TECHNICIAN), dark mode (P5)
       page.tsx                     Mes interventions (liste des affectations)
@@ -180,6 +190,23 @@ src/
       production/billing/[id]/payments/route.ts                  POST — toute méthode (P9)
       production/billing/check-overdue/route.ts                  POST — déclenchement manuel (P9)
       invoices/[id]/pay/route.ts                                  POST (client, Mobile Money uniquement) (P9)
+      consent/route.ts                                            GET / PATCH (client, résolu depuis la session) (P10)
+      production/crm/
+        customers/route.ts                                        GET — annuaire (recherche/segment) (P10)
+        customers/[id]/route.ts                                    GET — Customer 360 (P10)
+        customers/[id]/consent/route.ts                             PATCH — consentement recueilli en production (P10)
+        customers/[id]/interactions/route.ts                       GET / POST (P10)
+        customers/[id]/care-subscriptions/route.ts                 GET / POST — proposer un plan (P10)
+        care-subscriptions/[id]/route.ts                           PATCH — pause/reprise/résiliation (P10)
+        care-plans/route.ts                                        GET / POST (création réservée ADMIN) (P10)
+        care-plans/[id]/route.ts                                   PATCH (réservé ADMIN) (P10)
+        care/check-expiring/route.ts                               POST — déclenchement manuel (P10)
+        follow-ups/route.ts                                        GET / POST (P10)
+        follow-ups/[id]/route.ts                                   PATCH — clôturer/annuler (P10)
+        follow-ups/check-due/route.ts                              POST — déclenchement manuel (P10)
+        campaigns/route.ts                                         GET / POST (création réservée ADMIN) (P10)
+        campaigns/[id]/preview|send|cancel/route.ts                POST (réservé ADMIN) (P10)
+        referrals/route.ts                                        GET / POST — préparatoire (P10)
   proxy.ts                          Garde d'accès (Node.js runtime, Next 16) — rôle sur /production, /technicien, /espace-client (P5)
   lib/
     db.ts                           Client Prisma singleton
@@ -232,7 +259,7 @@ src/
       provider.ts                   Interface MapProvider
       get-provider.ts
       providers/openstreetmap-provider.ts  MVP sans dépendance ni clé API
-    rbac.ts                          requireProductionRole() — garde des routes/pages production
+    rbac.ts                          requireProductionRole() + requireAdminRole() (P10) — gardes routes/pages production
     rbac.test.ts
     technicians/
       service.ts                    Affectation (P4) + départ/arrivée/ownership (P5)
@@ -272,6 +299,20 @@ src/
       get-provider.ts               Sélection manuel/Mobile Money par méthode
       providers/manual-payment-provider.ts     CASH/BANK_TRANSFER/OTHER — confirme immédiatement
       providers/mobile-money-provider.ts       Orange/Moov/Wave — NOT_CONFIGURED, jamais de faux paiement
+    crm/
+      config.ts                     Seuils de segmentation centralisés (P10)
+      errors.ts                     Erreurs métier CRM (P10)
+      segmentation.ts                6 segments + parcours client, calculés à la volée (P10)
+      consent.ts                    Consentement opérationnel vs marketing (P10)
+      customer360.ts                 Vue agrégée — réutilise chaque domaine existant (P10)
+      interactions.ts                CustomerInteraction (P10)
+      follow-ups.ts                  FollowUp (P10)
+      campaigns.ts                    Campaign — preview/envoi, jamais de faux succès (P10)
+      care.ts                         CarePlan/CareSubscription (P10)
+      referrals.ts                    Referral — préparatoire uniquement (P10)
+      directory.ts                    Annuaire CRM — recherche/segment (P10)
+      dashboard.ts                     KPI CRM + KPI CEO croissance (P10)
+      crm.test.ts                      Tests unitaires consolidés (40 tests) (P10)
   components/
     marketing/site-header.tsx, site-footer.tsx
     auth/logout-button.tsx
@@ -290,6 +331,9 @@ src/
       work-order-actions.tsx          Planifier/affecter/transitions/contrôle qualité (P7)
       work-order-item-maintenance-select.tsx  Rattache une ligne à une opération d'entretien (P8)
       invoice-actions.tsx              Émettre/annuler/enregistrer un paiement (P9)
+      crm-actions.tsx                   Interaction/relance/abonnement Care — formulaires (P10)
+      campaign-actions.tsx              Création/preview/envoi de campagne (P10)
+      care-plan-form.tsx                Création/activation d'un plan CHICANO CARE (P10)
     technicien/
       intervention-actions.tsx      Je pars/Je suis arrivé/Démarrer le diagnostic (P5)
       diagnostic-checklist.tsx      10 catégories, upsert par ligne (P5)
@@ -302,13 +346,35 @@ src/
       reminder-appointment-button.tsx  "Prendre rendez-vous" → ServiceRequest pré-remplie (P8)
     factures/
       pay-button.tsx                   Payer (Mobile Money) — jamais de faux succès (P9)
+    account/
+      consent-form.tsx                 Toggles préférences de communication (client) (P10)
 prisma/
-  schema.prisma                     Modèle de données complet (section 62) + extensions véhicule (P2) + demandes (P3) + sequenceNumber rapport/devis (P6) + Work Order refondu (P7) + carnet automobile étendu (P8) + facturation étendue (P9)
-  seed.ts                           Templates de notification (35) + compte admin de test + techniciens démo (P4)
-  migrations/                       20260825001111_initial_schema, 20260825162443_service_requests, 20260826070000_diagnostic_report_quote_sequence (P6), 20260827100000_work_orders_phase7, 20260827100100_work_order_notifications (P7), 20260830000000_maintenance_type, 20260830000050_reminder_status, 20260830000100_maintenance_notifications (P8), 20260901000000_billing, 20260901000100_billing_notifications, 20260901000200_payment_method (P9) — aucune nouvelle en P4/P5
+  schema.prisma                     Modèle de données complet (section 62) + extensions véhicule (P2) + demandes (P3) + sequenceNumber rapport/devis (P6) + Work Order refondu (P7) + carnet automobile étendu (P8) + facturation étendue (P9) + CRM/CHICANO CARE (P10)
+  seed.ts                           Templates de notification (39) + compte admin de test + techniciens démo (P4, +4 templates P10)
+  migrations/                       20260825001111_initial_schema, 20260825162443_service_requests, 20260826070000_diagnostic_report_quote_sequence (P6), 20260827100000_work_orders_phase7, 20260827100100_work_order_notifications (P7), 20260830000000_maintenance_type, 20260830000050_reminder_status, 20260830000100_maintenance_notifications (P8), 20260901000000_billing, 20260901000100_billing_notifications, 20260901000200_payment_method (P9), 20260902000000_crm_care, 20260902000100_crm_notifications (P10) — aucune nouvelle en P4/P5
 vitest.config.mts                   Configuration des tests unitaires (npm test)
 docker-compose.yml                  PostgreSQL local (port 5433) — non utilisé depuis P2.5, Neon en usage réel
 ```
+
+### Positionnement de la Phase 10
+
+```
+Phase 8 — Maintenance / Carnet automobile numérique
+        ↓ (historique + rappels, réutilisés tels quels)
+Phase 9 — Facturation / Paiement
+        ↓ (factures + marge, réutilisées telles quelles)
+Phase 10 — CRM / Customer 360 / CHICANO CARE
+```
+
+**Le CRM oriente et rend visibles les domaines existants — il ne les
+duplique jamais.** Customer 360 (`src/lib/crm/customer360.ts`) est un
+agrégateur pur : chaque section (véhicules, demandes, rendez-vous, devis,
+work orders, factures, entretien, rappels) est lue via la fonction
+"ForCustomer"/"ForProduction" déjà construite dans son propre domaine
+(Phases 2 à 9), jamais réinventée. Segmentation et parcours client sont
+calculés à la volée, jamais stockés — même discipline que
+`MaintenanceReminderLevel` (Phase 8). Détail complet dans
+[`CRM.md`](CRM.md) et [`CHICANO-CARE.md`](CHICANO-CARE.md).
 
 ## 3. Fichiers existants conservés
 
@@ -324,10 +390,12 @@ n'est un prototype jetable.
 
 ## 5. Ce qui doit être créé (prochaines phases)
 
-Voir [`ROADMAP.md`](ROADMAP.md) — phases 3 à 10 non démarrées : demandes de service,
-urgence, géolocalisation, rendez-vous, dashboard production, technicien, diagnostic,
-rapport, devis, ordre de travail, facturation, carnet numérique, rappels, CRM,
-B2B/flotte.
+Phases 3 à 10 (demandes de service, urgence, géolocalisation, rendez-vous,
+dashboard production, technicien, diagnostic, rapport, devis, ordre de
+travail, facturation, carnet numérique, rappels, CRM, CHICANO CARE) sont
+désormais livrées — voir [`ROADMAP.md`](ROADMAP.md) pour le détail de
+chaque phase. Reste à faire : B2B/flotte complet (préparé mais non
+construit en Phase 10, voir `CRM.md`).
 
 ## 6. Architecture cible
 

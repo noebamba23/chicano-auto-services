@@ -36,6 +36,21 @@ function matches(row: Row, where: Record<string, unknown> | undefined): boolean 
       if ((condition as { notIn: unknown[] }).notIn.includes(row[key])) return false;
       continue;
     }
+    // { dueAt: { lte: ... } } etc. — ajouté en Phase 10 (relances/rappels
+    // CRM : premières comparaisons d'ordre nécessaires dans ce fake db).
+    if (
+      condition !== null &&
+      typeof condition === "object" &&
+      ("lte" in condition || "gte" in condition || "lt" in condition || "gt" in condition)
+    ) {
+      const c = condition as { lte?: unknown; gte?: unknown; lt?: unknown; gt?: unknown };
+      const val = row[key] as never;
+      if (c.lte !== undefined && !(val <= (c.lte as never))) return false;
+      if (c.gte !== undefined && !(val >= (c.gte as never))) return false;
+      if (c.lt !== undefined && !(val < (c.lt as never))) return false;
+      if (c.gt !== undefined && !(val > (c.gt as never))) return false;
+      continue;
+    }
     if (row[key] !== condition) return false;
   }
   return true;
@@ -255,8 +270,24 @@ export function createFakeDb() {
         const rows = applyOrder(store.get().filter((r) => matches(r, where)), orderBy);
         return rows[0] ?? null;
       },
-      async findMany({ where, orderBy }: { where: Record<string, unknown>; orderBy?: unknown }) {
-        return applyOrder(store.get().filter((r) => matches(r, where)), orderBy);
+      async findMany({
+        where,
+        orderBy,
+        skip,
+        take,
+      }: {
+        where: Record<string, unknown>;
+        orderBy?: unknown;
+        skip?: number;
+        take?: number;
+      }) {
+        let rows = applyOrder(store.get().filter((r) => matches(r, where)), orderBy);
+        if (skip) rows = rows.slice(skip);
+        if (take !== undefined) rows = rows.slice(0, take);
+        return rows;
+      },
+      async count({ where }: { where: Record<string, unknown> }) {
+        return store.get().filter((r) => matches(r, where)).length;
       },
     };
   }
@@ -691,6 +722,9 @@ export function createFakeDb() {
       const rows = applyOrder(workOrders.filter((r) => matches(r, where)), orderBy);
       return rows.map(withWorkOrderExtras);
     },
+    async count({ where }: { where: Record<string, unknown> }) {
+      return workOrders.filter((r) => matches(r, where)).length;
+    },
   };
 
   const workOrderItemModel = {
@@ -863,9 +897,34 @@ export function createFakeDb() {
       );
       return rows[0] ?? null;
     },
-    async findMany({ where, orderBy, include }: { where: Record<string, unknown>; orderBy?: unknown; include?: unknown }) {
-      const rows = applyOrder(maintenanceReminders.filter((r) => matches(r, where)), orderBy);
-      if (!include) return rows;
+    // where.vehicle.customerId + attache la relation vehicle si demandée via
+    // include OU select imbriqué (Phase 10 — src/lib/crm/segmentation.ts,
+    // dashboard.ts, customer360.ts interrogent tous les rappels actifs avec
+    // leur véhicule, parfois filtrés par client).
+    async findMany({
+      where,
+      orderBy,
+      include,
+      select,
+    }: {
+      where: Record<string, unknown>;
+      orderBy?: unknown;
+      include?: { vehicle?: unknown };
+      select?: { vehicle?: unknown };
+    }) {
+      const { vehicle: vehicleWhere, ...flat } = where as { vehicle?: { customerId?: string } } & Record<string, unknown>;
+      const rows = applyOrder(
+        maintenanceReminders.filter((r) => {
+          if (!matches(r, flat)) return false;
+          if (vehicleWhere?.customerId !== undefined) {
+            const veh = vehicles.find((v) => v.id === r.vehicleId);
+            if (!veh || veh.customerId !== vehicleWhere.customerId) return false;
+          }
+          return true;
+        }),
+        orderBy
+      );
+      if (!include?.vehicle && !select?.vehicle) return rows;
       return rows.map((r) => ({ ...r, vehicle: vehicles.find((v) => v.id === r.vehicleId) ?? null }));
     },
   };
@@ -990,6 +1049,81 @@ export function createFakeDb() {
     },
   };
 
+  // Phase 10 — CRM & CHICANO CARE. carePlans/careSubscriptions distincts
+  // (careSubscription a besoin d'un include carePlan/vehicle, les autres
+  // sont de purs genericModel — même limite documentée partout ailleurs
+  // dans ce fichier : forme suffisante pour la logique applicative testée).
+  let campaigns: Row[] = [];
+  let carePlans: Row[] = [];
+  let careSubscriptions: Row[] = [];
+  let customerInteractions: Row[] = [];
+  let followUps: Row[] = [];
+  let referrals: Row[] = [];
+
+  const campaignModel = genericModel(
+    { get: () => campaigns, set: (r) => (campaigns = r) },
+    { status: "DRAFT", scheduledAt: null, sentCount: 0, skippedCount: 0 }
+  );
+
+  const carePlanModel = genericModel(
+    { get: () => carePlans, set: (r) => (carePlans = r) },
+    { description: null, active: true }
+  );
+
+  function withCareSubscriptionExtras(row: Row) {
+    return {
+      ...row,
+      carePlan: carePlans.find((p) => p.id === row.carePlanId) ?? null,
+      vehicle: row.vehicleId ? (vehicles.find((v) => v.id === row.vehicleId) ?? null) : null,
+    };
+  }
+
+  const careSubscriptionModel = {
+    async create({ data }: { data: Record<string, unknown> }) {
+      const row: Row = {
+        id: randomUUID(),
+        status: "ACTIVE",
+        startedAt: new Date(),
+        endedAt: null,
+        vehicleId: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        ...data,
+      } as Row;
+      careSubscriptions.push(row);
+      return row;
+    },
+    async update({ where, data }: { where: { id: string }; data: Record<string, unknown> }) {
+      const row = careSubscriptions.find((r) => r.id === where.id);
+      if (!row) throw new Error("Record to update not found.");
+      Object.assign(row, data, { updatedAt: new Date() });
+      return withCareSubscriptionExtras(row);
+    },
+    async findUnique({ where }: { where: Record<string, unknown> }) {
+      const row = careSubscriptions.find((r) => matches(r, where));
+      return row ? withCareSubscriptionExtras(row) : null;
+    },
+    async findMany({ where, orderBy }: { where: Record<string, unknown>; orderBy?: unknown }) {
+      const rows = applyOrder(careSubscriptions.filter((r) => matches(r, where)), orderBy);
+      return rows.map(withCareSubscriptionExtras);
+    },
+    async count({ where }: { where: Record<string, unknown> }) {
+      return careSubscriptions.filter((r) => matches(r, where)).length;
+    },
+  };
+
+  const customerInteractionModel = genericModel(
+    { get: () => customerInteractions, set: (r) => (customerInteractions = r) },
+    { subject: null, content: null }
+  );
+
+  const followUpModel = genericModel(
+    { get: () => followUps, set: (r) => (followUps = r) },
+    { status: "PENDING", notes: null, assignedToId: null, completedAt: null, cancelledAt: null }
+  );
+
+  const referralModel = genericModel({ get: () => referrals, set: (r) => (referrals = r) }, { status: "PENDING" });
+
   const fakeDb = {
     vehicle: vehicleModel,
     customer: customerModel,
@@ -1019,6 +1153,12 @@ export function createFakeDb() {
     invoice: invoiceModel,
     invoiceItem: invoiceItemModel,
     payment: paymentModel,
+    campaign: campaignModel,
+    carePlan: carePlanModel,
+    careSubscription: careSubscriptionModel,
+    customerInteraction: customerInteractionModel,
+    followUp: followUpModel,
+    referral: referralModel,
     async $transaction(fnOrArray: unknown) {
       if (typeof fnOrArray === "function") {
         return (fnOrArray as (tx: typeof fakeDb) => unknown)(fakeDb);
@@ -1036,8 +1176,32 @@ export function createFakeDb() {
     }) {
       vehicles.push({ status: "ACTIVE", ...row } as Row);
     },
-    _seedCustomer(row: { id: string; userId: string }) {
-      customers.push(row as Row);
+    // user optionnel, stocké tel quel sur la ligne (même principe que
+    // _seedTechnician ci-dessous) — permet aux tests Phase 10 (Customer
+    // 360, annuaire CRM) d'exercer customer.user.firstName/phoneE164 sans
+    // reproduire un vrai `include` Prisma dans ce fake db.
+    _seedCustomer(row: {
+      id: string;
+      userId: string;
+      customerType?: string;
+      whatsappOptIn?: boolean;
+      emailOptIn?: boolean;
+      smsOptIn?: boolean;
+      marketingOptIn?: boolean;
+      user?: { firstName: string; lastName: string; phoneE164: string; email?: string | null; createdAt?: Date };
+    }) {
+      customers.push({
+        customerType: "INDIVIDUAL",
+        whatsappOptIn: false,
+        emailOptIn: false,
+        smsOptIn: false,
+        marketingOptIn: false,
+        consentGivenAt: null,
+        consentSource: null,
+        consentRevokedAt: null,
+        createdAt: new Date(),
+        ...row,
+      } as Row);
     },
     _seedTechnician(row: { id: string; user: { firstName: string; lastName: string } }) {
       technicians.push({ skills: [], isAvailable: true, ...row } as Row);
@@ -1076,6 +1240,12 @@ export function createFakeDb() {
       invoices = [];
       invoiceItems = [];
       payments = [];
+      campaigns = [];
+      carePlans = [];
+      careSubscriptions = [];
+      customerInteractions = [];
+      followUps = [];
+      referrals = [];
       nextSrSequence = 1;
       nextReportSequence = 1;
       nextQuoteSequence = 1;

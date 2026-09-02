@@ -44,6 +44,12 @@ const TEMPLATES: { event: NotificationEvent; body: string }[] = [
   { event: "PAYMENT_PARTIAL", body: "CHICANO AUTO SERVICES\nAcompte de {{amount}} F CFA reçu pour la facture {{reference}}. Solde restant à régler." },
   { event: "INVOICE_PAID", body: "CHICANO AUTO SERVICES\nVotre facture {{reference}} est intégralement réglée. Merci !" },
   { event: "PAYMENT_FAILED", body: "CHICANO AUTO SERVICES\nVotre tentative de paiement pour la facture {{reference}} n'a pas abouti." },
+  // CRM & CHICANO CARE (Phase 10). Destinataire de FOLLOW_UP_DUE : le
+  // membre du personnel assigné (jamais le client, voir docs/CRM.md).
+  { event: "CARE_STARTED", body: "CHICANO AUTO SERVICES\nBienvenue dans CHICANO CARE ! Votre abonnement {{plan}} est actif." },
+  { event: "CARE_EXPIRING", body: "CHICANO AUTO SERVICES\nVotre abonnement CHICANO CARE {{plan}} arrive bientôt à échéance." },
+  { event: "CARE_EXPIRED", body: "CHICANO AUTO SERVICES\nVotre abonnement CHICANO CARE {{plan}} est arrivé à échéance." },
+  { event: "FOLLOW_UP_DUE", body: "CHICANO CONTROL CENTER\nRelance à effectuer : {{reason}}." },
 ];
 
 async function main() {
