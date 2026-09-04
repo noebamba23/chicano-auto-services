@@ -9,9 +9,20 @@ generator client {
   provider = "prisma-client-js"
 }
 
+// DATABASE_URL : endpoint Neon pooled (pgbouncer), utilisé par le runtime
+// applicatif — seul mode compatible avec le serverless (Vercel : chaque
+// invocation de fonction ouvre sa propre connexion, un pool géré côté Neon
+// évite l'épuisement des connexions Postgres). DIRECT_URL : endpoint Neon
+// direct (non poolé), utilisé UNIQUEMENT par le CLI Prisma pour les
+// migrations (`prisma migrate deploy`/`dev`) — le mode transaction du
+// pooler ne supporte pas les verrous de session nécessaires aux migrations.
+// Levée du blocker infrastructure "Neon pooling" — aucune migration créée
+// par ce changement, `directUrl` n'affecte que le comportement du CLI, pas
+// le schéma de la base.
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 // ============================================================
