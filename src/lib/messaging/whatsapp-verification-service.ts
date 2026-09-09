@@ -20,6 +20,7 @@ export class WhatsAppVerificationError extends Error {
       | "ALREADY_CONSUMED"
       | "MAX_ATTEMPTS"
       | "INVALID_CODE"
+      | "PROVIDER_MISCONFIGURED"
   ) {
     super(message);
     this.name = "WhatsAppVerificationError";
@@ -28,6 +29,40 @@ export class WhatsAppVerificationError extends Error {
 
 function buildOtpMessage(code: string) {
   return `CHICANO AUTO SERVICES\nVotre code de vérification :\n${code}\n\nValable ${otpConfig.ttlMinutes} minutes. Ne le partagez avec personne.`;
+}
+
+// WhatsApp Business Platform exige un template pré-approuvé pour tout
+// message initié par l'entreprise hors fenêtre de conversation ouverte par
+// le client — un OTP est par construction le tout premier message envoyé à
+// un numéro. En mode mock, le comportement texte libre existant est
+// conservé tel quel (aucun réseau réel, rien à approuver). En mode meta,
+// aucun repli silencieux vers sendText() : sans nom de template configuré
+// (WHATSAPP_META_OTP_TEMPLATE_NAME), l'échec est explicite et observable
+// plutôt que d'envoyer un texte libre que Meta rejettera.
+async function sendOtpCode(
+  provider: ReturnType<typeof getWhatsAppProvider>,
+  phoneE164: string,
+  code: string
+) {
+  if (isMockWhatsAppActive()) {
+    return provider.sendText(phoneE164, buildOtpMessage(code));
+  }
+
+  const templateName = process.env.WHATSAPP_META_OTP_TEMPLATE_NAME;
+  if (!templateName) {
+    throw new WhatsAppVerificationError(
+      "Provider WhatsApp Meta actif sans WHATSAPP_META_OTP_TEMPLATE_NAME configuré : aucun template approuvé pour l'envoi de l'OTP.",
+      "PROVIDER_MISCONFIGURED"
+    );
+  }
+  if (!provider.sendTemplate) {
+    throw new WhatsAppVerificationError(
+      "Le provider WhatsApp actif ne supporte pas l'envoi par template.",
+      "PROVIDER_MISCONFIGURED"
+    );
+  }
+
+  return provider.sendTemplate(phoneE164, templateName, { code });
 }
 
 async function assertCooldownElapsed(userId: string) {
@@ -66,7 +101,7 @@ async function issueAndSendCode(userId: string, phoneE164: string, resendCountIn
   });
 
   const provider = getWhatsAppProvider();
-  const result = await provider.sendText(phoneE164, buildOtpMessage(code));
+  const result = await sendOtpCode(provider, phoneE164, code);
 
   if (!result.success) {
     throw new WhatsAppVerificationError(

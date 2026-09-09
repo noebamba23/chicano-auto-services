@@ -14,4 +14,15 @@ export class MockWhatsAppProvider implements WhatsAppProvider {
     );
     return { success: true, providerMessageId: `mock-${Date.now()}` };
   }
+
+  async sendTemplate(
+    to: string,
+    templateName: string,
+    params: Record<string, string>
+  ): Promise<MessageSendResult> {
+    console.log(
+      `[WHATSAPP MOCK] → ${to} (template: ${templateName})\nParamètres : ${JSON.stringify(params)}\n(Ce message n'a pas été envoyé sur un vrai réseau WhatsApp — fournisseur de développement.)`
+    );
+    return { success: true, providerMessageId: `mock-${Date.now()}` };
+  }
 }
