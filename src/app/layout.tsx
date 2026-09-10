@@ -12,10 +12,50 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+const SITE_URL = "https://chicano-auto-services.vercel.app";
+const SITE_DESCRIPTION =
+  "Diagnostic automobile de précision, entretien, réparation et assistance à Bamako. Nous diagnostiquons avant de réparer.";
+
 export const metadata: Metadata = {
-  title: "CHICANO AUTO SERVICES",
-  description:
-    "Diagnostic automobile de précision, entretien, réparation et assistance à Bamako. Nous diagnostiquons avant de réparer.",
+  metadataBase: new URL(SITE_URL),
+  title: {
+    default: "CHICANO AUTO SERVICES — Diagnostic automobile à Bamako",
+    template: "%s — CHICANO AUTO SERVICES",
+  },
+  description: SITE_DESCRIPTION,
+  keywords: [
+    "CHICANO AUTO SERVICES",
+    "garage automobile Bamako",
+    "diagnostic automobile Bamako",
+    "diagnostic voiture Bamako",
+    "entretien automobile Bamako",
+    "réparation automobile Bamako",
+    "mécanicien Bamako",
+    "assistance automobile Bamako",
+    "intervention mobile automobile",
+    "gestion de flotte automobile Mali",
+  ],
+  openGraph: {
+    type: "website",
+    locale: "fr_ML",
+    url: SITE_URL,
+    siteName: "CHICANO AUTO SERVICES",
+    title: "CHICANO AUTO SERVICES — Diagnostic automobile à Bamako",
+    description: SITE_DESCRIPTION,
+    images: ["/chicano-logo.png"],
+  },
+  twitter: {
+    card: "summary",
+    title: "CHICANO AUTO SERVICES — Diagnostic automobile à Bamako",
+    description: SITE_DESCRIPTION,
+    images: ["/chicano-logo.png"],
+  },
+  alternates: {
+    canonical: "/",
+  },
+  icons: {
+    icon: "/favicon.ico",
+  },
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

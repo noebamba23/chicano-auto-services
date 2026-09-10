@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { SiteHeader } from "@/components/marketing/site-header";
 import { SiteFooter } from "@/components/marketing/site-footer";
+import { IconLifeBuoy } from "@/components/marketing/icons";
 import { getSession } from "@/lib/auth/session";
 import { getCustomerIdForUser, getVehicleForCustomer, VehicleNotFoundError } from "@/lib/vehicles/service";
 
@@ -30,8 +31,10 @@ export default async function UrgencePage({
       <SiteHeader />
       <main className="flex flex-1 items-center justify-center bg-chicano-gray-light px-4 py-24">
         <div className="max-w-md rounded-lg bg-white p-8 text-center shadow-sm">
-          <p className="text-3xl">🚨</p>
-          <h1 className="mt-4 text-xl font-bold text-chicano-black">Demande d&apos;intervention urgente</h1>
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-chicano-red/10">
+            <IconLifeBuoy className="h-7 w-7 text-chicano-red" />
+          </div>
+          <h1 className="mt-5 text-xl font-bold text-chicano-black">Demande d&apos;intervention urgente</h1>
           {vehicleLabel && (
             <p className="mt-2 text-sm font-medium text-chicano-black">Concernant : {vehicleLabel}</p>
           )}
