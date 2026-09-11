@@ -10,20 +10,21 @@ const NAV_LINKS = [
   { href: "/#intervention-mobile", label: "Intervention mobile" },
   { href: "/#entreprises", label: "Entreprises" },
   { href: "/#contact", label: "Contact" },
+  { href: "/connexion", label: "Connexion" },
 ];
 
 export function MobileNav() {
   const [open, setOpen] = useState(false);
 
   return (
-    <div className="lg:hidden">
+    <div className="xl:hidden">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
         aria-controls="mobile-nav-panel"
         aria-label={open ? "Fermer le menu" : "Ouvrir le menu"}
-        className="flex h-10 w-10 items-center justify-center rounded-md text-chicano-white transition hover:bg-white/10"
+        className="flex h-11 w-11 items-center justify-center rounded-md text-chicano-white transition hover:bg-white/10"
       >
         {open ? <IconClose className="h-6 w-6" /> : <IconMenu className="h-6 w-6" />}
       </button>
@@ -39,33 +40,19 @@ export function MobileNav() {
                 key={link.href}
                 href={link.href}
                 onClick={() => setOpen(false)}
-                className="rounded-md px-3 py-2.5 text-sm font-medium text-chicano-gray-light/90 transition hover:bg-white/10 hover:text-chicano-white"
+                className="flex min-h-11 items-center rounded-md px-3 py-3 text-sm font-medium text-chicano-gray-light/90 transition hover:bg-white/10 hover:text-chicano-white"
               >
                 {link.label}
               </Link>
             ))}
           </nav>
-          <div className="mt-3 flex flex-col gap-2 border-t border-white/10 pt-3">
-            <Link
-              href="/connexion"
-              onClick={() => setOpen(false)}
-              className="rounded-md px-3 py-2.5 text-center text-sm font-medium text-chicano-white/90 transition hover:bg-white/10"
-            >
-              Connexion
-            </Link>
+          <div className="mt-3 border-t border-white/10 pt-3">
             <Link
               href="/inscription"
               onClick={() => setOpen(false)}
-              className="rounded-md px-3 py-2.5 text-center text-sm font-medium text-chicano-white/90 transition hover:bg-white/10"
+              className="flex min-h-11 items-center justify-center rounded-md bg-chicano-white px-3 py-3 text-center text-sm font-semibold text-chicano-black transition hover:bg-chicano-gray-light"
             >
-              Créer un compte
-            </Link>
-            <Link
-              href="/inscription"
-              onClick={() => setOpen(false)}
-              className="rounded-md border border-white/20 px-3 py-2.5 text-center text-sm font-semibold text-chicano-white transition hover:bg-white/10"
-            >
-              Demander un diagnostic
+              DEMANDER UN DIAGNOSTIC
             </Link>
           </div>
         </div>

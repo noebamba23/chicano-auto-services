@@ -8,6 +8,7 @@ const NAV_LINKS = [
   { href: "/#intervention-mobile", label: "Intervention mobile" },
   { href: "/#entreprises", label: "Entreprises" },
   { href: "/#contact", label: "Contact" },
+  { href: "/connexion", label: "Connexion" },
 ];
 
 export function SiteHeader() {
@@ -28,42 +29,41 @@ export function SiteHeader() {
           </span>
         </Link>
 
-        <nav className="hidden items-center gap-5 lg:flex xl:gap-6">
-          {NAV_LINKS.map((link) => (
-            <Link
-              key={link.href}
-              href={link.href}
-              className="text-sm text-chicano-gray-light/80 transition hover:text-chicano-white"
-            >
-              {link.label}
-            </Link>
-          ))}
-        </nav>
+        <div className="hidden items-center gap-8 xl:flex">
+          <nav className="flex items-center gap-4">
+            {NAV_LINKS.map((link) => (
+              <Link
+                key={link.href}
+                href={link.href}
+                className="text-sm whitespace-nowrap text-chicano-gray-light/80 transition hover:text-chicano-white"
+              >
+                {link.label}
+              </Link>
+            ))}
+          </nav>
 
-        <div className="flex items-center gap-2 sm:gap-3">
-          <Link
-            href="/inscription"
-            className="hidden rounded-md bg-chicano-white px-3 py-2 text-sm font-semibold text-chicano-black transition hover:bg-chicano-gray-light 2xl:block"
-          >
-            Demander un diagnostic
-          </Link>
-          <Link
-            href="/connexion"
-            className="hidden text-sm font-medium text-chicano-white/90 hover:text-chicano-white lg:block"
-          >
-            Connexion
-          </Link>
-          <Link
-            href="/inscription"
-            className="hidden rounded-md border border-white/20 px-3 py-2 text-sm font-semibold text-chicano-white transition hover:bg-white/10 lg:block"
-          >
-            Créer un compte
-          </Link>
+          <div className="flex items-center gap-2">
+            <Link
+              href="/inscription"
+              className="rounded-md bg-chicano-white px-3 py-2 text-sm font-semibold whitespace-nowrap text-chicano-black transition hover:bg-chicano-gray-light"
+            >
+              DEMANDER UN DIAGNOSTIC
+            </Link>
+            <Link
+              href="/urgence"
+              className="rounded-md bg-chicano-red px-3 py-2 text-sm font-semibold whitespace-nowrap text-white shadow-sm transition hover:bg-chicano-red-dark"
+            >
+              🚨 URGENCE
+            </Link>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 xl:hidden">
           <Link
             href="/urgence"
-            className="rounded-md bg-chicano-red px-3 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-chicano-red-dark"
+            className="flex min-h-11 items-center rounded-md bg-chicano-red px-3 py-3 text-sm font-semibold whitespace-nowrap text-white shadow-sm transition hover:bg-chicano-red-dark"
           >
-            🚨 Urgence
+            🚨 URGENCE
           </Link>
           <MobileNav />
         </div>

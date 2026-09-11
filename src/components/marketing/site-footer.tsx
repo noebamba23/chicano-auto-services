@@ -23,22 +23,17 @@ export function SiteFooter() {
               </li>
               <li>
                 <Link href="/#services" className="transition hover:text-chicano-white">
-                  Entretien &amp; réparation
+                  Entretien
                 </Link>
               </li>
               <li>
                 <Link href="/#services" className="transition hover:text-chicano-white">
-                  Électricité automobile
-                </Link>
-              </li>
-              <li>
-                <Link href="/#services" className="transition hover:text-chicano-white">
-                  Expertise avant achat
+                  Réparation
                 </Link>
               </li>
               <li>
                 <Link href="/#intervention-mobile" className="transition hover:text-chicano-white">
-                  Intervention mobile
+                  Service mobile
                 </Link>
               </li>
             </ul>
@@ -48,18 +43,13 @@ export function SiteFooter() {
             <p className="text-sm font-semibold text-chicano-white">Entreprise</p>
             <ul className="mt-3 space-y-2 text-sm">
               <li>
-                <Link href="/#services" className="transition hover:text-chicano-white">
-                  Assistance
-                </Link>
-              </li>
-              <li>
-                <Link href="/#intervention-mobile" className="transition hover:text-chicano-white">
-                  Service mobile
-                </Link>
-              </li>
-              <li>
                 <Link href="/#entreprises" className="transition hover:text-chicano-white">
-                  Flottes &amp; B2B
+                  Flottes
+                </Link>
+              </li>
+              <li>
+                <Link href="/#contact" className="transition hover:text-chicano-white">
+                  Contact
                 </Link>
               </li>
             </ul>
@@ -78,24 +68,14 @@ export function SiteFooter() {
                   Créer un compte
                 </Link>
               </li>
-              <li>
-                <Link href="/espace-client/vehicules" className="transition hover:text-chicano-white">
-                  Mes véhicules
-                </Link>
-              </li>
-              <li>
-                <Link href="/espace-client/demandes" className="transition hover:text-chicano-white">
-                  Mes demandes
-                </Link>
-              </li>
             </ul>
           </div>
         </div>
 
         <div className="mt-10 border-t border-white/10 pt-6">
           <p className="text-sm font-semibold text-chicano-white">Localisation</p>
-          <p className="mt-2 text-sm">Banankoro, Route de Sikasso, Bamako</p>
-          <p className="mt-1 text-sm">WhatsApp : disponible depuis votre espace client</p>
+          <p className="mt-2 text-sm">Bamako, Mali</p>
+          <p className="mt-1 text-sm">WhatsApp disponible depuis votre espace client.</p>
         </div>
 
         <p className="mt-8 border-t border-white/10 pt-6 text-xs text-chicano-gray">
