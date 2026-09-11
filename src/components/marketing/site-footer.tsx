@@ -84,29 +84,26 @@ export function SiteFooter() {
           </div>
           <div>
             <p className="text-sm font-semibold text-chicano-white">Contact</p>
-            <p className="mt-2 flex min-h-11 items-center text-sm">
-              Téléphone :{" "}
-              <a href={CONTACT_LINKS.tel} className="ml-1 transition hover:text-chicano-white">
-                {CONTACT.phone}
-              </a>
-            </p>
-            <p className="flex min-h-11 items-center text-sm">
-              WhatsApp :{" "}
-              <a
-                href={CONTACT_LINKS.whatsapp}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="ml-1 transition hover:text-chicano-white"
-              >
-                {CONTACT.whatsapp}
-              </a>
-            </p>
-            <p className="flex min-h-11 items-center text-sm break-all">
-              E-mail :{" "}
-              <a href={CONTACT_LINKS.mailto} className="ml-1 transition hover:text-chicano-white">
-                {CONTACT.email}
-              </a>
-            </p>
+            <a
+              href={CONTACT_LINKS.tel}
+              className="mt-2 flex min-h-11 items-center text-sm transition hover:text-chicano-white"
+            >
+              Téléphone : {CONTACT.phone}
+            </a>
+            <a
+              href={CONTACT_LINKS.whatsapp}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex min-h-11 items-center text-sm transition hover:text-chicano-white"
+            >
+              WhatsApp : {CONTACT.whatsapp}
+            </a>
+            <a
+              href={CONTACT_LINKS.mailto}
+              className="flex min-h-11 items-center text-sm break-all transition hover:text-chicano-white"
+            >
+              E-mail : {CONTACT.email}
+            </a>
           </div>
         </div>
 
