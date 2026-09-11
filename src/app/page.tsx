@@ -3,6 +3,7 @@ import Link from "next/link";
 import { SiteHeader } from "@/components/marketing/site-header";
 import { SiteFooter } from "@/components/marketing/site-footer";
 import { Reveal } from "@/components/marketing/reveal";
+import { CONTACT_LINKS } from "@/config/contact";
 import {
   IconArrowRight,
   IconBolt,
@@ -390,14 +391,22 @@ export default function HomePage() {
               </div>
             </Reveal>
 
-            <div className="mt-10">
+            <div className="mt-10 flex flex-wrap gap-4">
               <Link
                 href="/inscription"
-                className="inline-flex items-center gap-2 rounded-md bg-chicano-red px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-chicano-red/20 transition hover:bg-chicano-red-dark"
+                className="inline-flex min-h-11 items-center gap-2 rounded-md bg-chicano-red px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-chicano-red/20 transition hover:bg-chicano-red-dark"
               >
                 DEMANDER UNE INTERVENTION
                 <IconArrowRight className="h-4 w-4" />
               </Link>
+              <a
+                href={CONTACT_LINKS.whatsapp}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex min-h-11 items-center gap-2 rounded-md border border-chicano-gray-light px-6 py-3 text-sm font-semibold text-chicano-black transition hover:bg-chicano-gray-light"
+              >
+                💬 CONTACTER SUR WHATSAPP
+              </a>
             </div>
           </div>
         </section>

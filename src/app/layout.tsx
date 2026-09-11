@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import { CONTACT, PHONE_DIGITS } from "@/config/contact";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -65,13 +66,38 @@ export const metadata: Metadata = {
   },
 };
 
+// Données structurées minimales (schema.org AutomotiveBusiness) — reflètent
+// uniquement les coordonnées réelles centralisées dans src/config/contact.ts,
+// aucune donnée inventée (pas d'avis, de note, d'horaires).
+const jsonLd = {
+  "@context": "https://schema.org",
+  "@type": "AutomotiveBusiness",
+  name: "CHICANO AUTO SERVICES",
+  image: `${SITE_URL}/hero-diagnostic.png`,
+  url: SITE_URL,
+  telephone: PHONE_DIGITS,
+  email: CONTACT.email,
+  address: {
+    "@type": "PostalAddress",
+    streetAddress: `${CONTACT.address.locality}, ${CONTACT.address.route}`,
+    addressLocality: CONTACT.address.city,
+    addressCountry: "ML",
+  },
+};
+
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
       lang="fr"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col bg-chicano-white text-chicano-black">{children}</body>
+      <body className="min-h-full flex flex-col bg-chicano-white text-chicano-black">
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        />
+        {children}
+      </body>
     </html>
   );
 }

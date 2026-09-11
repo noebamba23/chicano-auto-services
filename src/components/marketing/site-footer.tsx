@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { CONTACT, CONTACT_LINKS, ADDRESS_LINES } from "@/config/contact";
 
 export function SiteFooter() {
   return (
@@ -72,10 +73,41 @@ export function SiteFooter() {
           </div>
         </div>
 
-        <div className="mt-10 border-t border-white/10 pt-6">
-          <p className="text-sm font-semibold text-chicano-white">Localisation</p>
-          <p className="mt-2 text-sm">Bamako, Mali</p>
-          <p className="mt-1 text-sm">WhatsApp disponible depuis votre espace client.</p>
+        <div className="mt-10 grid gap-8 border-t border-white/10 pt-6 sm:grid-cols-2">
+          <div>
+            <p className="text-sm font-semibold text-chicano-white">Localisation</p>
+            {ADDRESS_LINES.map((line) => (
+              <p key={line} className="mt-1 text-sm">
+                {line}
+              </p>
+            ))}
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-chicano-white">Contact</p>
+            <p className="mt-2 flex min-h-11 items-center text-sm">
+              Téléphone :{" "}
+              <a href={CONTACT_LINKS.tel} className="ml-1 transition hover:text-chicano-white">
+                {CONTACT.phone}
+              </a>
+            </p>
+            <p className="flex min-h-11 items-center text-sm">
+              WhatsApp :{" "}
+              <a
+                href={CONTACT_LINKS.whatsapp}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="ml-1 transition hover:text-chicano-white"
+              >
+                {CONTACT.whatsapp}
+              </a>
+            </p>
+            <p className="flex min-h-11 items-center text-sm break-all">
+              E-mail :{" "}
+              <a href={CONTACT_LINKS.mailto} className="ml-1 transition hover:text-chicano-white">
+                {CONTACT.email}
+              </a>
+            </p>
+          </div>
         </div>
 
         <p className="mt-8 border-t border-white/10 pt-6 text-xs text-chicano-gray">

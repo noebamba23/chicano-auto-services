@@ -4,6 +4,7 @@ import { SiteFooter } from "@/components/marketing/site-footer";
 import { IconLifeBuoy } from "@/components/marketing/icons";
 import { getSession } from "@/lib/auth/session";
 import { getCustomerIdForUser, getVehicleForCustomer, VehicleNotFoundError } from "@/lib/vehicles/service";
+import { CONTACT_LINKS } from "@/config/contact";
 
 export default async function UrgencePage({
   searchParams,
@@ -43,12 +44,22 @@ export default async function UrgencePage({
             CHICANO) arrive très prochainement.
             {!session && " Créez votre compte dès maintenant pour être prêt."}
           </p>
-          <Link
-            href={session ? "/espace-client/vehicules" : "/inscription"}
-            className="mt-6 inline-block rounded-md bg-chicano-red px-5 py-2.5 text-sm font-semibold text-white hover:bg-chicano-red-dark"
-          >
-            {session ? "Retour à mes véhicules" : "Créer mon compte"}
-          </Link>
+          <div className="mt-6 flex flex-col items-center gap-3">
+            <Link
+              href={session ? "/espace-client/vehicules" : "/inscription"}
+              className="inline-flex min-h-11 items-center rounded-md bg-chicano-red px-5 py-2.5 text-sm font-semibold text-white hover:bg-chicano-red-dark"
+            >
+              {session ? "Retour à mes véhicules" : "Créer mon compte"}
+            </Link>
+            <a
+              href={CONTACT_LINKS.whatsapp}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex min-h-11 items-center gap-2 rounded-md border border-chicano-gray-light px-5 py-2.5 text-sm font-semibold text-chicano-black transition hover:bg-chicano-gray-light"
+            >
+              💬 CONTACTER SUR WHATSAPP
+            </a>
+          </div>
         </div>
       </main>
       <SiteFooter />
