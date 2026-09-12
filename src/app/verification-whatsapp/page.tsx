@@ -70,17 +70,17 @@ export default function VerifyWhatsAppPage() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-chicano-gray-light px-4 py-16">
-      <div className="w-full max-w-md rounded-lg bg-white p-8 shadow-sm">
-        <h1 className="text-2xl font-bold text-chicano-black">Vérifions votre numéro WhatsApp</h1>
-        <p className="mt-2 text-sm text-chicano-gray">
+    <main className="flex min-h-screen items-center justify-center bg-chicano-black px-4 py-16">
+      <div className="w-full max-w-md rounded-lg border border-white/10 bg-chicano-black-soft p-8">
+        <h1 className="text-2xl font-bold text-chicano-white">Vérifions votre numéro WhatsApp</h1>
+        <p className="mt-2 text-sm text-chicano-gray-light/70">
           Nous allons vous envoyer un code de vérification sur WhatsApp afin de sécuriser votre compte
           CHICANO.
         </p>
 
         <form onSubmit={onSubmit} className="mt-8 space-y-4">
           <div>
-            <label htmlFor="code" className="block text-sm font-medium text-chicano-black">
+            <label htmlFor="code" className="block text-sm font-medium text-chicano-white">
               Code CHICANO
             </label>
             <input
@@ -92,17 +92,17 @@ export default function VerifyWhatsAppPage() {
               onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
               placeholder="482731"
               required
-              className="mt-1 w-full rounded-md border border-chicano-gray-light px-3 py-2 text-center text-lg tracking-[0.4em] focus:border-chicano-red focus:outline-none"
+              className="mt-1 w-full rounded-md border border-white/15 bg-transparent px-3 py-2 text-center text-lg tracking-[0.4em] text-chicano-white placeholder:text-chicano-gray-light/30 focus:border-chicano-red focus:outline-none"
             />
           </div>
 
-          {error && <p className="text-sm text-chicano-red">{error}</p>}
-          {info && <p className="text-sm text-emerald-600">{info}</p>}
+          {error && <p className="text-sm text-chicano-red-bright">{error}</p>}
+          {info && <p className="text-sm text-emerald-400">{info}</p>}
 
           <button
             type="submit"
             disabled={loading || code.length !== 6}
-            className="w-full rounded-md bg-chicano-red px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-chicano-red-dark disabled:opacity-60"
+            className="min-h-11 w-full rounded-md bg-chicano-red px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-chicano-red-dark disabled:opacity-60"
           >
             {loading ? "Vérification..." : "Vérifier mon compte"}
           </button>
@@ -111,7 +111,7 @@ export default function VerifyWhatsAppPage() {
         <button
           onClick={onResend}
           disabled={resending || cooldown > 0}
-          className="mt-4 w-full text-center text-sm font-medium text-chicano-red disabled:text-chicano-gray"
+          className="mt-4 min-h-11 w-full text-center text-sm font-medium text-chicano-red-bright disabled:text-chicano-gray-light/40"
         >
           {cooldown > 0 ? `Renvoyer un code (${cooldown}s)` : "Je n'ai pas reçu de code — renvoyer"}
         </button>

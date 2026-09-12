@@ -9,6 +9,7 @@ import { homeForRole } from "@/lib/auth/home-for-role";
 
 const PROTECTED_PREFIXES = ["/espace-client", "/production", "/admin", "/technicien"];
 const AUTH_ONLY_PAGES = ["/connexion", "/inscription"];
+const VERIFICATION_PAGE = "/verification-whatsapp";
 const PRODUCTION_PREFIXES = ["/production", "/admin"];
 const PRODUCTION_ROLES = ["PRODUCTION_STAFF", "ADMIN", "SUPER_ADMIN"];
 const TECHNICIAN_PREFIX = "/technicien";
@@ -18,12 +19,25 @@ export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
   const isProtected = PROTECTED_PREFIXES.some((p) => pathname.startsWith(p));
   const isAuthOnly = AUTH_ONLY_PAGES.includes(pathname);
+  const isVerificationPage = pathname === VERIFICATION_PAGE;
 
-  if (!isProtected && !isAuthOnly) {
+  if (!isProtected && !isAuthOnly && !isVerificationPage) {
     return NextResponse.next();
   }
 
   const session = await getSession();
+
+  // Étape de vérification WhatsApp accessible uniquement avec une session
+  // active (créée à l'inscription ou à la connexion d'un compte encore
+  // PENDING_VERIFICATION) — sans quoi l'écran OTP n'a aucun contexte à
+  // vérifier et l'appel à /api/auth/whatsapp/verify-code échouerait de toute
+  // façon en 401.
+  if (isVerificationPage && !session) {
+    const url = req.nextUrl.clone();
+    url.pathname = "/connexion";
+    url.search = "";
+    return NextResponse.redirect(url);
+  }
 
   if (isProtected) {
     if (!session) {
@@ -98,5 +112,6 @@ export const config = {
     "/technicien/:path*",
     "/connexion",
     "/inscription",
+    "/verification-whatsapp",
   ],
 };
