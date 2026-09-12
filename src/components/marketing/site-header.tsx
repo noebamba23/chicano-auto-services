@@ -7,7 +7,7 @@ const NAV_LINKS = [
   { href: "/#services", label: "Nos services" },
   { href: "/#intervention-mobile", label: "Intervention mobile" },
   { href: "/#entreprises", label: "Entreprises" },
-  { href: "/#contact", label: "Contact" },
+  { href: "/contact", label: "Contact" },
   { href: "/connexion", label: "Connexion" },
 ];
 
