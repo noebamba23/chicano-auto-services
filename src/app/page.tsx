@@ -427,13 +427,13 @@ export default function HomePage() {
             <div className="grid gap-10 lg:grid-cols-2 lg:items-center lg:gap-16">
               {/* Photo — propriétaire consultant son carnet numérique CHICANO sur smartphone */}
               <Reveal>
-                <div className="relative h-72 overflow-hidden rounded-lg sm:h-96 lg:h-full lg:min-h-[460px]">
+                <div className="relative w-full overflow-hidden rounded-lg bg-chicano-black-soft aspect-[1536/1024]">
                   <Image
                     src="/carnet-numerique.png"
                     alt="Propriétaire consultant le carnet numérique de son véhicule CHICANO AUTO SERVICES sur smartphone"
                     fill
                     sizes="(min-width: 1024px) 50vw, 100vw"
-                    className="object-cover"
+                    className="object-contain"
                   />
                 </div>
               </Reveal>
