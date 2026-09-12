@@ -156,13 +156,7 @@ export default function HomePage() {
         <section className="relative overflow-hidden bg-chicano-black text-chicano-white">
           <div className="mx-auto grid max-w-7xl items-center gap-10 px-4 py-16 sm:px-6 sm:py-24 lg:grid-cols-[1fr_1.15fr] lg:gap-8 lg:px-8 lg:py-0 xl:gap-12">
             <div className="relative z-10 lg:py-20">
-              {/* Rouge éclairci (--chicano-red-bright) : le rouge CHICANO
-                  standard tombe à 4.01:1 sur ce fond noir, sous le seuil
-                  WCAG AA (4.5:1) pour ce texte de petite taille. */}
-              <p className="text-sm font-semibold text-chicano-red-bright uppercase tracking-widest">
-                Diagnostic automobile de précision — Bamako
-              </p>
-              <h1 className="mt-4 max-w-xl text-4xl font-bold tracking-tight sm:text-6xl">
+              <h1 className="max-w-xl text-4xl font-bold tracking-tight sm:text-6xl">
                 Votre véhicule parle.
                 <br />
                 <span className="text-chicano-red">CHICANO</span> l&apos;écoute.
@@ -225,27 +219,43 @@ export default function HomePage() {
 
         {/* POURQUOI CHICANO */}
         <section id="pourquoi-chicano" className="mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:px-8">
-          <Reveal>
-            <Eyebrow>Notre approche</Eyebrow>
-            <h2 className="mt-2 max-w-2xl text-2xl font-bold text-chicano-black sm:text-3xl">
-              Nous diagnostiquons avant de réparer.
-            </h2>
-            <p className="mt-4 max-w-2xl text-chicano-gray">
-              Chez CHICANO, une réparation commence par la compréhension du problème.
-            </p>
-          </Reveal>
+          <div className="grid gap-10 lg:grid-cols-[0.82fr_1fr] lg:items-center lg:gap-14">
+            <Reveal>
+              <div className="relative h-64 overflow-hidden rounded-lg sm:h-80 lg:h-full lg:min-h-[420px]">
+                <Image
+                  src="/notre-approche.png"
+                  alt="Technicien CHICANO AUTO SERVICES utilisant une tablette de diagnostic électronique sur un véhicule, capot ouvert, atelier CHICANO"
+                  fill
+                  sizes="(min-width: 1024px) 40vw, 100vw"
+                  className="object-cover"
+                />
+              </div>
+            </Reveal>
 
-          <div className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-            {WHY_PILLARS.map((item, i) => (
-              <Reveal key={item.title} delayMs={i * 80}>
-                <div className="h-full rounded-lg border border-chicano-gray-light p-5">
-                  <span className="text-xs font-bold text-chicano-red">{String(i + 1).padStart(2, "0")}</span>
-                  <item.icon className="mt-2 h-6 w-6 text-chicano-red" />
-                  <p className="mt-3 font-semibold text-chicano-black">{item.title}</p>
-                  <p className="mt-1 text-sm text-chicano-gray">{item.desc}</p>
-                </div>
+            <div>
+              <Reveal>
+                <Eyebrow>Notre approche</Eyebrow>
+                <h2 className="mt-2 max-w-2xl text-2xl font-bold text-chicano-black sm:text-3xl">
+                  Nous diagnostiquons avant de réparer.
+                </h2>
+                <p className="mt-4 max-w-2xl text-chicano-gray">
+                  Chez CHICANO, une réparation commence par la compréhension du problème.
+                </p>
               </Reveal>
-            ))}
+
+              <div className="mt-8 grid gap-6 sm:grid-cols-2">
+                {WHY_PILLARS.map((item, i) => (
+                  <Reveal key={item.title} delayMs={i * 80}>
+                    <div className="h-full rounded-lg border border-chicano-gray-light p-5">
+                      <span className="text-xs font-bold text-chicano-red">{String(i + 1).padStart(2, "0")}</span>
+                      <item.icon className="mt-2 h-6 w-6 text-chicano-red" />
+                      <p className="mt-3 font-semibold text-chicano-black">{item.title}</p>
+                      <p className="mt-1 text-sm text-chicano-gray">{item.desc}</p>
+                    </div>
+                  </Reveal>
+                ))}
+              </div>
+            </div>
           </div>
         </section>
 
@@ -312,7 +322,19 @@ export default function HomePage() {
             <h2 className="mt-2 text-2xl font-bold text-chicano-black sm:text-3xl">Nos services</h2>
           </Reveal>
 
-          <div className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+          <Reveal className="mt-8">
+            <div className="relative h-64 overflow-hidden rounded-lg sm:h-80">
+              <Image
+                src="/atelier-vue-ensemble.png"
+                alt="Atelier CHICANO AUTO SERVICES : techniciens au travail sur plusieurs véhicules, ponts élévateurs, équipement professionnel"
+                fill
+                sizes="(min-width: 1024px) 1152px, 100vw"
+                className="object-cover"
+              />
+            </div>
+          </Reveal>
+
+          <div className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
             {SERVICES.map((service, i) => (
               <Reveal key={service.title} delayMs={i * 50} className="h-full">
                 <Link
@@ -344,18 +366,6 @@ export default function HomePage() {
               </Reveal>
             ))}
           </div>
-
-          <Reveal className="mt-10">
-            <div className="relative h-64 overflow-hidden rounded-lg sm:h-80">
-              <Image
-                src="/atelier-vue-ensemble.png"
-                alt="Atelier CHICANO AUTO SERVICES : techniciens au travail sur plusieurs véhicules, ponts élévateurs, équipement professionnel"
-                fill
-                sizes="(min-width: 1024px) 1152px, 100vw"
-                className="object-cover"
-              />
-            </div>
-          </Reveal>
         </section>
 
         {/* INTERVENTION MOBILE */}
@@ -415,54 +425,69 @@ export default function HomePage() {
         <section id="carnet-numerique" className="bg-chicano-black text-chicano-white">
           <div className="mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:px-8">
             <div className="grid gap-10 lg:grid-cols-2 lg:items-center lg:gap-16">
+              {/* Photo — propriétaire consultant son carnet numérique CHICANO sur smartphone */}
               <Reveal>
-                <Eyebrow tone="white">Carnet numérique</Eyebrow>
-                <h2 className="mt-2 text-2xl font-bold sm:text-3xl">
-                  Votre véhicule possède désormais une mémoire.
-                </h2>
-                <p className="mt-4 max-w-lg text-chicano-gray-light/80">
-                  Retrouvez l&apos;historique des diagnostics, entretiens, réparations et interventions de
-                  votre véhicule.
-                </p>
-
-                <div className="mt-8 grid gap-4 sm:grid-cols-2">
-                  {CARNET_BENEFITS.slice(0, 4).map((item) => (
-                    <div key={item.title} className="rounded-lg border border-white/10 p-4">
-                      <item.icon className="h-5 w-5 text-chicano-red" />
-                      <p className="mt-2 text-sm font-semibold">{item.title}</p>
-                      <p className="mt-1 text-xs text-chicano-gray-light/70">{item.desc}</p>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="mt-8">
-                  <Link
-                    href="/espace-client"
-                    className="inline-flex items-center gap-2 rounded-md border border-white/20 px-6 py-3 text-sm font-semibold text-white transition hover:bg-white/10"
-                  >
-                    Découvrir mon espace client
-                    <IconArrowRight className="h-4 w-4" />
-                  </Link>
+                <div className="relative h-72 overflow-hidden rounded-lg sm:h-96 lg:h-full lg:min-h-[460px]">
+                  <Image
+                    src="/carnet-numerique.png"
+                    alt="Propriétaire consultant le carnet numérique de son véhicule CHICANO AUTO SERVICES sur smartphone"
+                    fill
+                    sizes="(min-width: 1024px) 50vw, 100vw"
+                    className="object-cover"
+                  />
                 </div>
               </Reveal>
 
-              {/* Illustration — aperçu du carnet numérique (mockup d'interface, pas une donnée réelle) */}
-              <Reveal delayMs={100}>
-                <div className="rounded-2xl border border-white/10 bg-chicano-black-soft p-6">
-                  <div className="flex items-center justify-between border-b border-white/10 pb-4">
-                    <p className="text-sm font-semibold">Carnet numérique du véhicule</p>
-                    <IconHistory className="h-5 w-5 text-chicano-red" />
-                  </div>
-                  <ul className="mt-4 space-y-3">
-                    {CARNET_ENTRIES.map((entry) => (
-                      <li key={entry.label} className="flex items-center gap-3 rounded-lg bg-white/5 px-3 py-2.5">
-                        <entry.icon className="h-4 w-4 shrink-0 text-chicano-red" />
-                        <span className="text-sm text-chicano-gray-light/90">{entry.label}</span>
-                      </li>
+              <div>
+                <Reveal>
+                  <Eyebrow tone="white">Carnet numérique</Eyebrow>
+                  <h2 className="mt-2 text-2xl font-bold sm:text-3xl">
+                    Votre véhicule possède désormais une mémoire.
+                  </h2>
+                  <p className="mt-4 max-w-lg text-chicano-gray-light/80">
+                    Retrouvez l&apos;historique des diagnostics, entretiens, réparations et interventions de
+                    votre véhicule.
+                  </p>
+
+                  <div className="mt-8 grid gap-4 sm:grid-cols-2">
+                    {CARNET_BENEFITS.slice(0, 4).map((item) => (
+                      <div key={item.title} className="rounded-lg border border-white/10 p-4">
+                        <item.icon className="h-5 w-5 text-chicano-red" />
+                        <p className="mt-2 text-sm font-semibold">{item.title}</p>
+                        <p className="mt-1 text-xs text-chicano-gray-light/70">{item.desc}</p>
+                      </div>
                     ))}
-                  </ul>
-                </div>
-              </Reveal>
+                  </div>
+
+                  <div className="mt-8">
+                    <Link
+                      href="/espace-client"
+                      className="inline-flex items-center gap-2 rounded-md border border-white/20 px-6 py-3 text-sm font-semibold text-white transition hover:bg-white/10"
+                    >
+                      Découvrir mon espace client
+                      <IconArrowRight className="h-4 w-4" />
+                    </Link>
+                  </div>
+                </Reveal>
+
+                {/* Illustration — aperçu du carnet numérique (mockup d'interface, pas une donnée réelle) */}
+                <Reveal delayMs={100}>
+                  <div className="mt-8 rounded-2xl border border-white/10 bg-chicano-black-soft p-6">
+                    <div className="flex items-center justify-between border-b border-white/10 pb-4">
+                      <p className="text-sm font-semibold">Carnet numérique du véhicule</p>
+                      <IconHistory className="h-5 w-5 text-chicano-red" />
+                    </div>
+                    <ul className="mt-4 space-y-3">
+                      {CARNET_ENTRIES.map((entry) => (
+                        <li key={entry.label} className="flex items-center gap-3 rounded-lg bg-white/5 px-3 py-2.5">
+                          <entry.icon className="h-4 w-4 shrink-0 text-chicano-red" />
+                          <span className="text-sm text-chicano-gray-light/90">{entry.label}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </Reveal>
+              </div>
             </div>
           </div>
         </section>
@@ -498,13 +523,19 @@ export default function HomePage() {
                 ))}
               </div>
 
-              <div className="mt-8">
+              <div className="mt-8 flex flex-wrap gap-4">
                 <Link
                   href="/inscription"
-                  className="inline-flex items-center gap-2 rounded-md bg-chicano-black px-6 py-3 text-sm font-semibold text-white transition hover:bg-chicano-black-soft"
+                  className="inline-flex min-h-11 items-center gap-2 rounded-md bg-chicano-black px-6 py-3 text-sm font-semibold text-white transition hover:bg-chicano-black-soft"
                 >
                   GÉRER MA FLOTTE
                   <IconArrowRight className="h-4 w-4" />
+                </Link>
+                <Link
+                  href="/#contact"
+                  className="inline-flex min-h-11 items-center gap-2 rounded-md border border-chicano-gray-light px-6 py-3 text-sm font-semibold text-chicano-black transition hover:bg-chicano-gray-light"
+                >
+                  PARLER À CHICANO
                 </Link>
               </div>
             </Reveal>
