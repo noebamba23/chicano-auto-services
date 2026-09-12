@@ -94,7 +94,13 @@ export async function proxy(req: NextRequest) {
     }
   }
 
-  if (isAuthOnly && session) {
+  // Un compte encore PENDING_VERIFICATION doit pouvoir revoir l'écran de
+  // connexion (ex. nouvel onglet, retour arrière) plutôt que d'être renvoyé
+  // vers homeForRole() puis rebondi vers /verification-whatsapp par la garde
+  // ci-dessus — ce double redirect empêchait /connexion de jamais s'afficher
+  // pour ces comptes. Seuls les comptes pleinement vérifiés sont écartés
+  // de /connexion et /inscription.
+  if (isAuthOnly && session && session.status !== "PENDING_VERIFICATION") {
     const url = req.nextUrl.clone();
     url.pathname = homeForRole(session.role);
     url.search = "";

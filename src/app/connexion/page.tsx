@@ -56,9 +56,12 @@ export default function LoginPage() {
           <span className="text-sm font-bold tracking-wide text-chicano-white">CHICANO AUTO SERVICES</span>
         </Link>
 
-        <h1 className="mt-6 text-2xl font-bold text-chicano-white">Connexion à votre espace</h1>
+        <p className="mt-6 text-sm font-semibold text-chicano-red-bright uppercase tracking-widest">
+          Connexion
+        </p>
+        <h1 className="mt-2 text-2xl font-bold text-chicano-white">Accédez à votre espace CHICANO</h1>
         <p className="mt-2 text-sm text-chicano-gray-light/70">
-          Accédez à votre espace CHICANO avec votre numéro WhatsApp.
+          Connectez-vous avec le numéro WhatsApp associé à votre compte.
         </p>
 
         <form onSubmit={onSubmit} className="mt-8 space-y-4">
@@ -96,7 +99,7 @@ export default function LoginPage() {
             disabled={loading}
             className="min-h-11 w-full rounded-md bg-chicano-red px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-chicano-red-dark disabled:opacity-60"
           >
-            {loading ? "Connexion..." : "CONTINUER"}
+            {loading ? "Connexion..." : "SE CONNECTER"}
           </button>
         </form>
 
