@@ -9,7 +9,7 @@ export interface NormalizedPhone {
 }
 
 export class InvalidPhoneNumberError extends Error {
-  constructor(message = "Numéro de téléphone invalide.") {
+  constructor(message = "Veuillez saisir un numéro WhatsApp valide.") {
     super(message);
     this.name = "InvalidPhoneNumberError";
   }

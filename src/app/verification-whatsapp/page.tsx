@@ -72,10 +72,9 @@ export default function VerifyWhatsAppPage() {
   return (
     <main className="flex min-h-screen items-center justify-center bg-chicano-black px-4 py-16">
       <div className="w-full max-w-md rounded-lg border border-white/10 bg-chicano-black-soft p-8">
-        <h1 className="text-2xl font-bold text-chicano-white">Vérifions votre numéro WhatsApp</h1>
+        <h1 className="text-2xl font-bold text-chicano-white">Vérifiez votre numéro WhatsApp</h1>
         <p className="mt-2 text-sm text-chicano-gray-light/70">
-          Nous allons vous envoyer un code de vérification sur WhatsApp afin de sécuriser votre compte
-          CHICANO.
+          Nous vous avons envoyé un code de vérification sur WhatsApp pour sécuriser votre connexion.
         </p>
 
         <form onSubmit={onSubmit} className="mt-8 space-y-4">
@@ -90,7 +89,7 @@ export default function VerifyWhatsAppPage() {
               maxLength={6}
               value={code}
               onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
-              placeholder="482731"
+              placeholder="000000"
               required
               className="mt-1 w-full rounded-md border border-white/15 bg-transparent px-3 py-2 text-center text-lg tracking-[0.4em] text-chicano-white placeholder:text-chicano-gray-light/30 focus:border-chicano-red focus:outline-none"
             />
@@ -104,7 +103,7 @@ export default function VerifyWhatsAppPage() {
             disabled={loading || code.length !== 6}
             className="min-h-11 w-full rounded-md bg-chicano-red px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-chicano-red-dark disabled:opacity-60"
           >
-            {loading ? "Vérification..." : "Vérifier mon compte"}
+            {loading ? "Vérification..." : "SE CONNECTER"}
           </button>
         </form>
 
@@ -113,7 +112,7 @@ export default function VerifyWhatsAppPage() {
           disabled={resending || cooldown > 0}
           className="mt-4 min-h-11 w-full text-center text-sm font-medium text-chicano-red-bright disabled:text-chicano-gray-light/40"
         >
-          {cooldown > 0 ? `Renvoyer un code (${cooldown}s)` : "Je n'ai pas reçu de code — renvoyer"}
+          {cooldown > 0 ? `Renvoyer un code (${cooldown}s)` : "Je n'ai pas reçu de code — Renvoyer"}
         </button>
       </div>
     </main>

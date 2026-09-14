@@ -59,9 +59,9 @@ export default function LoginPage() {
         <p className="mt-6 text-sm font-semibold text-chicano-red-bright uppercase tracking-widest">
           Connexion
         </p>
-        <h1 className="mt-2 text-2xl font-bold text-chicano-white">Accédez à votre espace CHICANO</h1>
+        <h1 className="mt-2 text-2xl font-bold text-chicano-white">Connectez-vous à votre espace CHICANO</h1>
         <p className="mt-2 text-sm text-chicano-gray-light/70">
-          Connectez-vous avec le numéro WhatsApp associé à votre compte.
+          Entrez votre numéro WhatsApp pour accéder à votre espace client.
         </p>
 
         <form onSubmit={onSubmit} className="mt-8 space-y-4">
@@ -99,13 +99,11 @@ export default function LoginPage() {
             disabled={loading}
             className="min-h-11 w-full rounded-md bg-chicano-red px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-chicano-red-dark disabled:opacity-60"
           >
-            {loading ? "Connexion..." : "SE CONNECTER"}
+            {loading ? "Connexion..." : "CONTINUER"}
           </button>
         </form>
 
-        <p className="mt-5 text-xs text-chicano-gray-light/50">
-          Votre numéro WhatsApp permet de sécuriser l&apos;accès à votre compte CHICANO.
-        </p>
+        <p className="mt-5 text-xs text-chicano-gray-light/50">Connexion sécurisée par WhatsApp.</p>
 
         <p className="mt-6 text-center text-sm text-chicano-gray-light/70">
           Vous n&apos;avez pas encore de compte ?{" "}

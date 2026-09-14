@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSession } from "@/lib/auth/session";
+import { getSession, SESSION_COOKIE_NAME } from "@/lib/auth/session";
 import { homeForRole } from "@/lib/auth/home-for-role";
 
 // Garde d'accès aux espaces protégés. Depuis Next.js 16, Proxy tourne par
@@ -94,13 +94,25 @@ export async function proxy(req: NextRequest) {
     }
   }
 
-  // Un compte encore PENDING_VERIFICATION doit pouvoir revoir l'écran de
-  // connexion (ex. nouvel onglet, retour arrière) plutôt que d'être renvoyé
-  // vers homeForRole() puis rebondi vers /verification-whatsapp par la garde
-  // ci-dessus — ce double redirect empêchait /connexion de jamais s'afficher
-  // pour ces comptes. Seuls les comptes pleinement vérifiés sont écartés
-  // de /connexion et /inscription.
-  if (isAuthOnly && session && session.status !== "PENDING_VERIFICATION") {
+  // Une visite explicite de /connexion avec une session PENDING_VERIFICATION
+  // encore active (vérification WhatsApp jamais terminée — inscription
+  // abandonnée, ancien test, etc.) efface le cookie de session au lieu de le
+  // laisser influencer silencieusement le parcours : /connexion doit
+  // toujours repartir du formulaire numéro + mot de passe. Se reconnecter
+  // avec ce même numéro recrée normalement une session et renvoie vers
+  // /verification-whatsapp si le compte est toujours en attente. La ligne en
+  // base (table Session) n'est pas révoquée ici — clear-only, delete()
+  // via next/headers n'étant fiable que dans un Server Action/Route Handler,
+  // pas dans le middleware ; elle expire via son TTL existant.
+  if (pathname === "/connexion" && session && session.status === "PENDING_VERIFICATION") {
+    const response = NextResponse.next();
+    response.cookies.delete(SESSION_COOKIE_NAME);
+    return response;
+  }
+
+  // Sinon, un compte déjà pleinement authentifié est écarté de /connexion
+  // et /inscription vers son espace habituel.
+  if (isAuthOnly && session) {
     const url = req.nextUrl.clone();
     url.pathname = homeForRole(session.role);
     url.search = "";

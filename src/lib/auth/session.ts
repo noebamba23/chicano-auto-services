@@ -8,7 +8,8 @@ import type { AccountStatus, UserRole } from "@prisma/client";
 // cf. section 13 du prompt maître : "Ne mélange pas vérification du numéro
 // et authentification de session."
 
-const COOKIE_NAME = "chicano_session";
+export const SESSION_COOKIE_NAME = "chicano_session";
+const COOKIE_NAME = SESSION_COOKIE_NAME;
 const SESSION_TTL_SECONDS = 60 * 60 * 24 * 30; // 30 jours
 
 function getSecretKey() {
